@@ -1,7 +1,7 @@
 const STORAGE_JOB_ID_KEY = 'certificate_studio_job_id'
 const STORAGE_ACTIVE_TAB_KEY = 'certificate_studio_active_tab'
 
-export type AppTab = 'upload' | 'editor'
+export type AppTab = 'upload' | 'editor' | 'export'
 
 export function getStoredJobId(): string | null {
   try {
@@ -30,7 +30,7 @@ export function clearStoredJobId(): void {
 export function getStoredActiveTab(): AppTab {
   try {
     const tab = localStorage.getItem(STORAGE_ACTIVE_TAB_KEY)
-    if (tab === 'upload' || tab === 'editor') {
+    if (tab === 'upload' || tab === 'editor' || tab === 'export') {
       return tab
     }
   } catch {
@@ -38,6 +38,7 @@ export function getStoredActiveTab(): AppTab {
   }
   return 'upload'
 }
+
 
 export function setStoredActiveTab(tab: AppTab): void {
   try {

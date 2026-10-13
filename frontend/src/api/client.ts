@@ -73,7 +73,61 @@ export interface AutoFitResponse {
   all_fit: boolean
   overflow_count: number
 }
+export type ExportStatus =
+  | 'pending'
+  | 'validating'
+  | 'generating'
+  | 'packaging'
+  | 'verifying'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
 
+export interface ParticipantExportRecord {
+  csv_row: number
+  name: string
+  filename: string
+  fitted_font_size: number
+  status: string
+  error_message?: string | null
+}
+
+export interface GenerationReport {
+  job_id: string
+  export_id: string
+  timestamp: string
+  template_format: string
+  template_dimensions: {
+    width: number
+    height: number
+    aspect_ratio: number
+    orientation: string
+  }
+  font: string
+  text_color: string
+  alignment: string
+  auto_fit_enabled: boolean
+  total_participants: number
+  successful: number
+  failed: number
+  certificates: ParticipantExportRecord[]
+  warnings: string[]
+  errors: string[]
+}
+
+export interface ExportJobResponse {
+  export_id: string
+  job_id: string
+  status: ExportStatus
+  created_at: string
+  completed_at?: string | null
+  total_count: number
+  processed_count: number
+  percent_complete: number
+  report?: GenerationReport | null
+  error_message?: string | null
+  zip_size_bytes?: number | null
+}
 
 export interface TemplateMetadata {
   filename: string
@@ -391,3 +445,39 @@ export function getTemplatePreviewUrl(relativeUrl: string): string {
   if (relativeUrl.startsWith('http')) return relativeUrl
   return `${API_BASE_URL}${relativeUrl}`
 }
+
+export async function startBatchExport(jobId: string): Promise<ExportJobResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/exports`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null)
+    throw new ApiError(errorData?.detail || `Failed to start batch export (${response.status})`, response.status)
+  }
+
+  return response.json()
+}
+
+export async function getExportStatus(jobId: string, exportId: string): Promise<ExportJobResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/exports/${exportId}`, {
+    headers: {
+      Accept: 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null)
+    throw new ApiError(errorData?.detail || `Failed to get export status (${response.status})`, response.status)
+  }
+
+  return response.json()
+}
+
+export function getExportDownloadUrl(jobId: string, exportId: string): string {
+  return `${API_BASE_URL}/api/jobs/${jobId}/exports/${exportId}/download`
+}
+

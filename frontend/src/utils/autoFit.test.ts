@@ -2,14 +2,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { fetchTextLayout, autoFitAllNames } from '../api/client'
 
 describe('AutoFit and Request Cancellation', () => {
-  const originalFetch = global.fetch
+  const originalFetch = globalThis.fetch
 
   beforeEach(() => {
     vi.restoreAllMocks()
   })
 
   afterEach(() => {
-    global.fetch = originalFetch
+    globalThis.fetch = originalFetch
   })
 
   it('fetchTextLayout uses in-memory calculation endpoint when placement is provided', async () => {
@@ -26,7 +26,7 @@ describe('AutoFit and Request Cancellation', () => {
       ok: true,
       json: async () => mockResponse,
     })
-    global.fetch = fetchSpy
+    globalThis.fetch = fetchSpy
 
     const result = await fetchTextLayout('job-123', {
       sampleText: 'Ada Lovelace',
@@ -64,7 +64,7 @@ describe('AutoFit and Request Cancellation', () => {
         json: async () => ({ font_size: 50, fits: true, fitted_at_reduced_size: false, text_bounds: { x: 0, y: 0, width: 10, height: 10 }, draw_position: { x: 0, y: 0 }, warnings: [] }),
       })
     })
-    global.fetch = fetchSpy
+    globalThis.fetch = fetchSpy
 
     controller.abort()
 
@@ -109,7 +109,7 @@ describe('AutoFit and Request Cancellation', () => {
       ok: true,
       json: async () => mockAutoFitResponse,
     })
-    global.fetch = fetchSpy
+    globalThis.fetch = fetchSpy
 
     const res = await autoFitAllNames('job-123')
     expect(fetchSpy).toHaveBeenCalledWith(
@@ -120,3 +120,4 @@ describe('AutoFit and Request Cancellation', () => {
     expect(res.all_fit).toBe(true)
   })
 })
+

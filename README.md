@@ -13,29 +13,32 @@ Certificate Studio is organized as a clean, decoupled monorepo:
 
 ---
 
-## Current Status: Milestone 4.3 (One-Click Auto Fit and Infinite Loading Fix)
+## Current Status: Milestone 5 (Production-Quality Batch PDF Generation & ZIP Export)
 
 ### Key Specifications & Architecture
-- **V1 Template Requirement**: V1 requires certificate templates with an **EMPTY/BLANK recipient-name area**. All placeholder-removal and cleanup mechanisms have been cleanly removed to eliminate unnecessary complexity.
-- **Fixed-Aspect-Ratio Stationary Viewport**:
-  - The certificate canvas is completely stationary. Zero vertical jumping, zero viewport collapse, zero reflow during participant switching or typography adjustments.
-  - Image instance and canvas boundaries are preserved across font, size, color, and participant changes.
-  - Asynchronous loading and layout calculation indicators are rendered as non-disruptive, fixed-height overlays.
-- **Root-Cause Fix for Infinite Auto-Fitting**:
-  - **Decoupled In-Memory Layout**: Created `POST /api/jobs/{job_id}/layout/calculate` which calculates font fit on-the-fly using in-memory placement and typography parameters, removing the need to save to disk on every slider touch and breaking the parent re-render feedback loop.
-  - **AbortController Cancellation**: Stale requests are aborted immediately when a new user interaction occurs.
-  - **Request Timeout & Resilient Error Recovery**: 5-second timeout safeguard and user-facing retry button ensure the "Auto-fitting..." indicator never stalls indefinitely. Loading state is reliably cleared in `finally` blocks.
-- **One-Click "Auto Fit All Names"**:
-  - Prominent "Auto Fit All Names" button in the editor header and sidebar.
-  - Calculates optimal preferred font size across the entire CSV participant list without shrinking short names unnecessarily or clipping long names.
-  - Preserves placement coordinates, font family, color, and text alignment.
-  - Automatically updates job typography and generates an updated `BatchTypographyReport`.
-- **Typographic Baseline Consistency**:
-  - Center alignment shares identical horizontal and vertical anchor positions across all names.
-  - Font EM ascender/descender metric centering prevents ascenders or descenders (like 'y', 'g', 'j') from vertically displacing names.
-- **Session Persistence, New Project & Session Reset**:
-  - Automatically recovers active job ID, uploaded template, participant CSV, placement coordinates, and typography preferences across browser refreshes.
-  - Prominent "New Project" header action enables users to intentionally start a fresh project at any time.
+- **Three-Step Production Workflow**:
+  1. **Ingestion**: Template validation (PNG, JPG, single-page PDF) and participant CSV parsing with automatic name-column detection.
+  2. **Visual Editor**: Interactive single-box placement, 5 bundled fonts, live font fitting, baseline centering, and one-click "Auto Fit All Names".
+  3. **Generate & Download**: Pre-flight validation, live progress tracking, verified single-page PDF generation per participant, and atomic ZIP archive packaging.
+- **Shared Typography & Layout Engine**:
+  - Reuses the authoritative layout engine (`TypographyService.calculate_layout()`) for final PDF generation.
+  - Ensures 100% visual consistency between on-screen previews and exported PDFs.
+  - Individually calculates the optimal font size for every participant name; never reuses the size from the last editor preview.
+- **Single-Page PDF Generation (`PDFService`)**:
+  - **Raster Templates (PNG/JPG)**: Renders full-resolution image with exact Pillow text coordinates and exports to PDF with verified page bounds and resolution.
+  - **Vector PDF Templates**: Preserves original PDF page dimensions, vector lines, and text using PyMuPDF transparent overlays.
+  - Strictly verifies every generated PDF (opens with PyMuPDF, verifies exactly 1 page, confirms non-empty content and valid dimensions).
+- **Safe Filename Generation (`FilenameGenerator`)**:
+  - Sanitizes participant names into clean, OS-compliant filenames across macOS, Windows, and Linux.
+  - Prevents path traversal and removes unsafe characters.
+  - Resolves duplicate participant names deterministically (e.g. `Aarav Sharma.pdf`, `Aarav Sharma (2).pdf`).
+- **Atomic ZIP Archive Packaging (`ZipService`)**:
+  - Packages verified PDFs and a machine-readable `generation_report.json` into `certificates.zip`.
+  - Verifies ZIP integrity before publication.
+- **Session Persistence & Safety**:
+  - Maintains active session state across all 3 steps on page reload.
+  - Prohibits export if any participants have blocking overflow errors.
+
 
 ---
 

@@ -13,6 +13,7 @@ import {
   UploadCloud,
   ServerCrash,
   Plus,
+  Archive,
 } from 'lucide-react'
 import {
   fetchHealth,
@@ -32,6 +33,8 @@ import {
 import { TemplateUploader } from './components/TemplateUploader'
 import { CsvUploader } from './components/CsvUploader'
 import { CertificateEditor } from './components/CertificateEditor'
+import { ExportWorkspace } from './components/ExportWorkspace'
+
 import {
   getStoredJobId,
   setStoredJobId,
@@ -89,13 +92,16 @@ export const App: React.FC = () => {
         setCurrentJob(existingJob)
         setStoredJobId(existingJob.job_id)
 
-        // Restore tab if template exists and user was in editor
-        if (storedTab === 'editor' && existingJob.template) {
+        // Restore tab if requirements met
+        if (storedTab === 'export' && existingJob.template && existingJob.placement) {
+          setActiveTab('export')
+        } else if (storedTab === 'editor' && existingJob.template) {
           setActiveTab('editor')
         } else {
           setActiveTab('upload')
           setStoredActiveTab('upload')
         }
+
       } catch (err: unknown) {
         if (err instanceof ApiError && err.status === 404) {
           // Job expired or not found on server -> safely clear and start fresh
@@ -381,7 +387,24 @@ export const App: React.FC = () => {
                 <CheckCircle2 className="h-3 w-3 text-emerald-600 ml-0.5" />
               )}
             </button>
+
+            <button
+              type="button"
+              onClick={() => canContinueToGeneration && handleTabChange('export')}
+              disabled={!canContinueToGeneration}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all ${
+                activeTab === 'export'
+                  ? 'bg-white text-slate-900 shadow-xs font-semibold'
+                  : canContinueToGeneration
+                  ? 'text-slate-600 hover:text-slate-900'
+                  : 'text-slate-400 cursor-not-allowed opacity-60'
+              }`}
+            >
+              <Archive className="h-3.5 w-3.5" />
+              <span>3. Generate & Download</span>
+            </button>
           </div>
+
 
           {/* Actions & Status */}
           <div className="flex items-center gap-2.5">
@@ -600,28 +623,28 @@ export const App: React.FC = () => {
                 </div>
               </section>
             </div>
-          ) : (
-            currentJob?.template && (
-              <CertificateEditor
-                jobId={currentJob.job_id}
-                template={currentJob.template}
-                savedPlacement={currentJob.placement}
-                savedTypography={currentJob.typography}
-                savedBatchAnalysis={currentJob.batch_analysis}
-                participants={currentJob.participants_preview}
-                onSavePlacement={handleSavePlacement}
-                onSaveTypography={handleSaveTypography}
-                onBackToUpload={() => handleTabChange('upload')}
-                onContinue={() => {
-                  alert(
-                    'Milestone 4.2 complete! Placement and intelligent typography auto-fitting are validated. Batch PDF export and ZIP generation will be performed in Milestone 5.'
-                  )
-                }}
-                canContinue={canContinueToGeneration}
-              />
-            )
-          )}
+          ) : activeTab === 'editor' && currentJob?.template ? (
+            <CertificateEditor
+              jobId={currentJob.job_id}
+              template={currentJob.template}
+              savedPlacement={currentJob.placement}
+              savedTypography={currentJob.typography}
+              savedBatchAnalysis={currentJob.batch_analysis}
+              participants={currentJob.participants_preview}
+              onSavePlacement={handleSavePlacement}
+              onSaveTypography={handleSaveTypography}
+              onBackToUpload={() => handleTabChange('upload')}
+              onContinue={() => handleTabChange('export')}
+              canContinue={canContinueToGeneration}
+            />
+          ) : activeTab === 'export' && currentJob ? (
+            <ExportWorkspace
+              job={currentJob}
+              onBackToEditor={() => handleTabChange('editor')}
+            />
+          ) : null}
         </div>
+
 
         {/* Footer */}
         <footer className="mt-12 pt-6 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-4">
