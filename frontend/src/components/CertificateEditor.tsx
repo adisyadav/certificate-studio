@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   Stage,
   Layer,
@@ -20,12 +20,9 @@ import {
   Move,
   Maximize2,
   Type,
-  Eye,
   BarChart3,
   RefreshCw,
   AlertTriangle,
-  Eraser,
-  Sparkles,
 } from 'lucide-react'
 import type {
   TemplateMetadata,
@@ -34,15 +31,12 @@ import type {
   TypographyConfig,
   FontInfo,
   BatchTypographyReport,
-  CleanupConfig,
-  CleanupMode,
 } from '../api/client'
 import {
   getTemplatePreviewUrl,
-  getRenderedPreviewUrl,
-  getCleanedPreviewUrl,
   fetchFonts,
   analyzeTypography,
+  fetchTextLayout,
 } from '../api/client'
 import {
   normalizedToCanvas,
@@ -51,7 +45,7 @@ import {
   type CanvasRect,
 } from '../utils/coordinates'
 
-// Map font IDs to exact loaded @font-face family names
+// Map font IDs to exact loaded @font-face family names in index.css
 const FONT_ID_TO_FAMILY: Record<string, string> = {
   great_vibes: 'Great Vibes',
   allura: 'Allura',
@@ -60,19 +54,14 @@ const FONT_ID_TO_FAMILY: Record<string, string> = {
   eb_garamond: 'EB Garamond',
 }
 
-export type CanvasViewMode = 'personalized' | 'cleaned' | 'original'
-export type ActiveBoxType = 'placement' | 'cleanup'
-
 interface CertificateEditorProps {
   jobId: string
   template: TemplateMetadata
   savedPlacement: PlacementRegion | null
-  savedCleanup: CleanupConfig | null
   savedTypography: TypographyConfig | null
   savedBatchAnalysis: BatchTypographyReport | null
   participants: ParticipantRecord[]
   onSavePlacement: (placement: PlacementRegion) => Promise<void>
-  onSaveCleanup: (cleanup: CleanupConfig) => Promise<void>
   onSaveTypography: (config: TypographyConfig) => Promise<void>
   onBackToUpload: () => void
   onContinue: () => void
@@ -83,63 +72,45 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
   jobId,
   template,
   savedPlacement,
-  savedCleanup,
   savedTypography,
   savedBatchAnalysis,
   participants,
   onSavePlacement,
-  onSaveCleanup,
   onSaveTypography,
   onBackToUpload,
   onContinue,
   canContinue,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null)
-  const placementRectRef = useRef<Konva.Rect>(null)
-  const cleanupRectRef = useRef<Konva.Rect>(null)
+  const rectRef = useRef<Konva.Rect>(null)
   const trRef = useRef<Konva.Transformer>(null)
 
-  // Canvas background images for Konva
-  const [originalImageObj, setOriginalImageObj] = useState<HTMLImageElement | null>(null)
-  const [cleanedImageObj, setCleanedImageObj] = useState<HTMLImageElement | null>(null)
-  const [authoritativeImageObj, setAuthoritativeImageObj] = useState<HTMLImageElement | null>(null)
+  // 1. Certificate image element for Konva canvas (retained across participant/font changes)
+  const [imageObj, setImageObj] = useState<HTMLImageElement | null>(null)
   const [imageLoaded, setImageLoaded] = useState<boolean>(false)
 
-  // Stage display size preserving template aspect ratio
-  const [stageSize, setStageSize] = useState<{ width: number; height: number }>({
-    width: 800,
-    height: 600,
+  // 2. Stable Stage dimensions: computed only on actual window resize or initial mount
+  const [stageSize, setStageSize] = useState<{ width: number; height: number }>(() => {
+    const initialWidth = Math.min(840, typeof window !== 'undefined' ? window.innerWidth - 400 : 800)
+    const aspectRatio = template.aspect_ratio || 1.414
+    return {
+      width: Math.round(initialWidth),
+      height: Math.round(initialWidth / aspectRatio),
+    }
   })
 
-  // View toggle: Personalized | Cleaned | Original
-  const [viewMode, setViewMode] = useState<CanvasViewMode>('personalized')
-  // Active selected box for Konva transformer: 'placement' | 'cleanup'
-  const [activeBox, setActiveBox] = useState<ActiveBoxType>('placement')
-
-  // Placement region (recipient name placement)
-  const [currentPlacement, setCurrentPlacement] = useState<PlacementRegion | null>(
+  // 3. Placement region in normalized coordinates
+  const [currentPlacement, setCurrentPlacement] = useState<PlacementRegion>(
     savedPlacement || { x: 0.2, y: 0.45, width: 0.6, height: 0.12 }
   )
   const [hasUnsavedPlacement, setHasUnsavedPlacement] = useState<boolean>(!savedPlacement)
 
-  // Cleanup region and mode
-  const [cleanupConfig, setCleanupConfig] = useState<CleanupConfig>(
-    savedCleanup || {
-      mode: 'solid',
-      region: savedPlacement || { x: 0.2, y: 0.45, width: 0.6, height: 0.12 },
-      sample_border_color: true,
-      custom_color: '#ffffff',
-      inpaint_radius: 3,
-    }
-  )
-  const [hasUnsavedCleanup, setHasUnsavedCleanup] = useState<boolean>(false)
-
-  // Typography state
+  // 4. Typography configuration
   const [availableFonts, setAvailableFonts] = useState<FontInfo[]>([])
   const [typography, setTypography] = useState<TypographyConfig>(
     savedTypography || {
       font_id: 'great_vibes',
-      preferred_font_size: 52,
+      preferred_font_size: 56,
       min_font_size: 18,
       text_color: '#111827',
       alignment: 'center',
@@ -147,29 +118,33 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
   )
   const [hasUnsavedTypography, setHasUnsavedTypography] = useState<boolean>(false)
 
-  // Sample name previews
-  const shortSample = 'Jane Doe'
-  const longSample = 'Dr. Alexander Montgomery-Cunningham III'
-  const firstCsvParticipant = participants.find((p) => p.is_valid && p.name)?.name || null
-  const [selectedSample, setSelectedSample] = useState<string>(firstCsvParticipant || shortSample)
+  // 5. Participants selection: default to first valid participant from CSV if available
+  const validParticipants = useMemo(
+    () => participants.filter((p) => p.is_valid && p.name.trim()),
+    [participants]
+  )
 
-  // Debounced backend sync version counter & pending indicator
-  const [backendSyncVersion, setBackendSyncVersion] = useState<number>(1)
-  const [isBackendSyncing, setIsBackendSyncing] = useState<boolean>(false)
-  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const firstValidName = validParticipants[0]?.name || 'Jane Doe'
+  const [selectedSample, setSelectedSample] = useState<string>(firstValidName)
 
-  // Batch analysis state
+  // 6. Authoritative backend fitted layout metadata (font size, fit status, warnings)
+  const [backendFittedSize, setBackendFittedSize] = useState<number | null>(null)
+  const [textFits, setTextFits] = useState<boolean>(true)
+  const [layoutWarnings, setLayoutWarnings] = useState<string[]>([])
+  const [isCalculatingLayout, setIsCalculatingLayout] = useState<boolean>(false)
+  const layoutRequestIdRef = useRef<number>(0)
+
+  // 7. Batch analysis state
   const [batchReport, setBatchReport] = useState<BatchTypographyReport | null>(savedBatchAnalysis)
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false)
 
-  // Saving states
+  // 8. Saving and status states
   const [isSaving, setIsSaving] = useState<boolean>(false)
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  // Drawing state when user drags to draw either box
-  const [isDrawing, setIsDrawing] = useState<boolean>(false)
-  const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null)
+  // Debounced auto-save timer
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Load available fonts from backend
   useEffect(() => {
@@ -186,86 +161,29 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
       })
   }, [])
 
-  // 1. Load original preview image
+  // Load template preview image once (preserves instance across name / typography switches)
   useEffect(() => {
-    setImageLoaded(false)
     const img = new window.Image()
     img.src = getTemplatePreviewUrl(template.preview_url)
     img.crossOrigin = 'Anonymous'
     img.onload = () => {
-      setOriginalImageObj(img)
+      setImageObj(img)
       setImageLoaded(true)
     }
     img.onerror = () => {
-      setErrorMessage('Failed to load original template image.')
+      setErrorMessage('Failed to load certificate template preview.')
     }
   }, [template.preview_url])
 
-  // 2. Fetch authoritative rendered image & cleaned image when backendSyncVersion changes
-  useEffect(() => {
-    setIsBackendSyncing(true)
-    let isCancelled = false
-
-    // Load cleaned template image
-    const cleanedImg = new window.Image()
-    cleanedImg.src = getCleanedPreviewUrl(jobId, backendSyncVersion)
-    cleanedImg.crossOrigin = 'Anonymous'
-    cleanedImg.onload = () => {
-      if (!isCancelled) setCleanedImageObj(cleanedImg)
-    }
-
-    // Load authoritative personalized rendered image
-    const authImg = new window.Image()
-    authImg.src = getRenderedPreviewUrl(jobId, {
-      sampleText: selectedSample,
-      v: backendSyncVersion,
-    })
-    authImg.crossOrigin = 'Anonymous'
-    authImg.onload = () => {
-      if (!isCancelled) {
-        setAuthoritativeImageObj(authImg)
-        setIsBackendSyncing(false)
-      }
-    }
-    authImg.onerror = () => {
-      if (!isCancelled) {
-        setIsBackendSyncing(false)
-      }
-    }
-
-    return () => {
-      isCancelled = true
-    }
-  }, [jobId, backendSyncVersion, selectedSample])
-
-  // Debounced auto-save & sync trigger (250ms)
-  const triggerDebouncedSync = useCallback(() => {
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current)
-    }
-    debounceTimerRef.current = setTimeout(async () => {
-      try {
-        if (currentPlacement) {
-          await onSavePlacement(currentPlacement)
-        }
-        await onSaveCleanup(cleanupConfig)
-        await onSaveTypography(typography)
-        setBackendSyncVersion((v) => v + 1)
-      } catch {
-        // Silently ignore background sync errors; user can still click Save manually
-      }
-    }, 250)
-  }, [currentPlacement, cleanupConfig, typography, onSavePlacement, onSaveCleanup, onSaveTypography])
-
-  // 3. Responsive stage dimensions calculation
+  // Responsive stage dimensions preserving aspect ratio with stable boundaries
   const updateDimensions = useCallback(() => {
     if (!containerRef.current) return
-    const containerWidth = containerRef.current.clientWidth - 32
-    if (containerWidth <= 0) return
+    const containerWidth = containerRef.current.clientWidth - 24
+    if (containerWidth <= 100) return
 
     const aspectRatio = template.aspect_ratio || 1.414
     const targetHeight = containerWidth / aspectRatio
-    const maxHeight = Math.min(window.innerHeight * 0.65, 680)
+    const maxHeight = Math.min(window.innerHeight * 0.7, 720)
 
     let finalWidth = containerWidth
     let finalHeight = targetHeight
@@ -275,9 +193,14 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
       finalWidth = finalHeight * aspectRatio
     }
 
-    setStageSize({
-      width: Math.round(finalWidth),
-      height: Math.round(finalHeight),
+    const roundedW = Math.round(finalWidth)
+    const roundedH = Math.round(finalHeight)
+
+    setStageSize((prev) => {
+      if (Math.abs(prev.width - roundedW) < 2 && Math.abs(prev.height - roundedH) < 2) {
+        return prev
+      }
+      return { width: roundedW, height: roundedH }
     })
   }, [template.aspect_ratio])
 
@@ -287,22 +210,51 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
     return () => window.removeEventListener('resize', updateDimensions)
   }, [updateDimensions])
 
-  // 4. Attach transformer to active box (placement or cleanup)
+  // Attach Transformer to the single name placement rectangle
   useEffect(() => {
-    if (!trRef.current) return
-
-    if (activeBox === 'placement' && placementRectRef.current) {
-      trRef.current.nodes([placementRectRef.current])
-    } else if (activeBox === 'cleanup' && cleanupRectRef.current) {
-      trRef.current.nodes([cleanupRectRef.current])
-    } else {
-      trRef.current.nodes([])
+    if (trRef.current && rectRef.current) {
+      trRef.current.nodes([rectRef.current])
+      trRef.current.getLayer()?.batchDraw()
     }
-    trRef.current.getLayer()?.batchDraw()
-  }, [activeBox, currentPlacement, cleanupConfig.region, stageSize, viewMode])
+  }, [currentPlacement, stageSize])
+
+  // Debounced authoritative backend layout calculation
+  const requestAuthoritativeLayout = useCallback(() => {
+    const currentReqId = ++layoutRequestIdRef.current
+    setIsCalculatingLayout(true)
+
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+    }
+
+    debounceTimerRef.current = setTimeout(async () => {
+      try {
+        // First sync placement and typography so backend calculate_layout uses current values
+        await onSavePlacement(currentPlacement)
+        await onSaveTypography(typography)
+
+        const layout = await fetchTextLayout(jobId, { sampleText: selectedSample })
+        if (currentReqId === layoutRequestIdRef.current) {
+          setBackendFittedSize(layout.font_size)
+          setTextFits(layout.fits)
+          setLayoutWarnings(layout.warnings || [])
+          setIsCalculatingLayout(false)
+        }
+      } catch {
+        if (currentReqId === layoutRequestIdRef.current) {
+          setIsCalculatingLayout(false)
+        }
+      }
+    }, 250)
+  }, [jobId, currentPlacement, typography, selectedSample, onSavePlacement, onSaveTypography])
+
+  // Trigger debounced layout when typography, participant, or placement changes
+  useEffect(() => {
+    requestAuthoritativeLayout()
+  }, [requestAuthoritativeLayout])
 
   // Warn user before leaving page with unsaved changes
-  const hasUnsavedChanges = hasUnsavedPlacement || hasUnsavedCleanup || hasUnsavedTypography
+  const hasUnsavedChanges = hasUnsavedPlacement || hasUnsavedTypography
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (hasUnsavedChanges) {
@@ -314,66 +266,17 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [hasUnsavedChanges])
 
-  // Derived canvas pixel boxes
-  const placementCanvasRect: CanvasRect = currentPlacement
-    ? normalizedToCanvas(currentPlacement, stageSize.width, stageSize.height)
-    : { x: 0, y: 0, width: 0, height: 0 }
+  // Derived canvas pixel rect for Konva
+  const canvasRect: CanvasRect = useMemo(
+    () => normalizedToCanvas(currentPlacement, stageSize.width, stageSize.height),
+    [currentPlacement, stageSize]
+  )
 
-  const cleanupCanvasRect: CanvasRect = cleanupConfig.region
-    ? normalizedToCanvas(cleanupConfig.region, stageSize.width, stageSize.height)
-    : { x: 0, y: 0, width: 0, height: 0 }
-
-  // Canvas Drawing Handlers
-  const handleStageMouseDown = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
-    const clickedOnStage = e.target === e.target.getStage() || e.target.name() === 'background-image'
-    if (!clickedOnStage) return
-
-    const stage = e.target.getStage()
-    if (!stage) return
-    const pos = stage.getPointerPosition()
-    if (!pos) return
-
-    setIsDrawing(true)
-    setDrawStart({ x: pos.x, y: pos.y })
-    setSaveSuccess(false)
-  }
-
-  const handleStageMouseMove = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
-    if (!isDrawing || !drawStart) return
-    const stage = e.target.getStage()
-    if (!stage) return
-    const pos = stage.getPointerPosition()
-    if (!pos) return
-
-    const x = Math.min(drawStart.x, pos.x)
-    const y = Math.min(drawStart.y, pos.y)
-    const width = Math.max(10, Math.abs(pos.x - drawStart.x))
-    const height = Math.max(10, Math.abs(pos.y - drawStart.y))
-
-    const norm = canvasToNormalized({ x, y, width, height }, stageSize.width, stageSize.height)
-
-    if (activeBox === 'placement') {
-      setCurrentPlacement(norm)
-      setHasUnsavedPlacement(true)
-    } else {
-      setCleanupConfig((prev) => ({ ...prev, region: norm }))
-      setHasUnsavedCleanup(true)
-    }
-  }
-
-  const handleStageMouseUp = () => {
-    if (isDrawing) {
-      setIsDrawing(false)
-      setDrawStart(null)
-      triggerDebouncedSync()
-    }
-  }
-
-  // Handle Box Drag
-  const handlePlacementDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
+  // Handle rect drag
+  const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     const node = e.target
-    const newX = Math.max(0, Math.min(stageSize.width - placementCanvasRect.width, node.x()))
-    const newY = Math.max(0, Math.min(stageSize.height - placementCanvasRect.height, node.y()))
+    const newX = Math.max(0, Math.min(stageSize.width - canvasRect.width, node.x()))
+    const newY = Math.max(0, Math.min(stageSize.height - canvasRect.height, node.y()))
 
     node.position({ x: newX, y: newY })
 
@@ -381,8 +284,8 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
       {
         x: newX,
         y: newY,
-        width: placementCanvasRect.width,
-        height: placementCanvasRect.height,
+        width: canvasRect.width,
+        height: canvasRect.height,
       },
       stageSize.width,
       stageSize.height
@@ -391,36 +294,11 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
     setCurrentPlacement(norm)
     setHasUnsavedPlacement(true)
     setSaveSuccess(false)
-    triggerDebouncedSync()
   }
 
-  const handleCleanupDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
-    const node = e.target
-    const newX = Math.max(0, Math.min(stageSize.width - cleanupCanvasRect.width, node.x()))
-    const newY = Math.max(0, Math.min(stageSize.height - cleanupCanvasRect.height, node.y()))
-
-    node.position({ x: newX, y: newY })
-
-    const norm = canvasToNormalized(
-      {
-        x: newX,
-        y: newY,
-        width: cleanupCanvasRect.width,
-        height: cleanupCanvasRect.height,
-      },
-      stageSize.width,
-      stageSize.height
-    )
-
-    setCleanupConfig((prev) => ({ ...prev, region: norm }))
-    setHasUnsavedCleanup(true)
-    setSaveSuccess(false)
-    triggerDebouncedSync()
-  }
-
-  // Handle Box Transform
-  const handlePlacementTransformEnd = () => {
-    const node = placementRectRef.current
+  // Handle rect transform (resize)
+  const handleTransformEnd = () => {
+    const node = rectRef.current
     if (!node) return
 
     const scaleX = node.scaleX()
@@ -429,7 +307,7 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
     node.scaleX(1)
     node.scaleY(1)
 
-    const rawWidth = Math.max(15, node.width() * scaleX)
+    const rawWidth = Math.max(20, node.width() * scaleX)
     const rawHeight = Math.max(15, node.height() * scaleY)
     const rawX = Math.max(0, Math.min(stageSize.width - rawWidth, node.x()))
     const rawY = Math.max(0, Math.min(stageSize.height - rawHeight, node.y()))
@@ -448,48 +326,12 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
     setCurrentPlacement(norm)
     setHasUnsavedPlacement(true)
     setSaveSuccess(false)
-    triggerDebouncedSync()
   }
 
-  const handleCleanupTransformEnd = () => {
-    const node = cleanupRectRef.current
-    if (!node) return
-
-    const scaleX = node.scaleX()
-    const scaleY = node.scaleY()
-
-    node.scaleX(1)
-    node.scaleY(1)
-
-    const rawWidth = Math.max(15, node.width() * scaleX)
-    const rawHeight = Math.max(15, node.height() * scaleY)
-    const rawX = Math.max(0, Math.min(stageSize.width - rawWidth, node.x()))
-    const rawY = Math.max(0, Math.min(stageSize.height - rawHeight, node.y()))
-
-    const norm = canvasToNormalized(
-      {
-        x: rawX,
-        y: rawY,
-        width: rawWidth,
-        height: rawHeight,
-      },
-      stageSize.width,
-      stageSize.height
-    )
-
-    setCleanupConfig((prev) => ({ ...prev, region: norm }))
-    setHasUnsavedCleanup(true)
-    setSaveSuccess(false)
-    triggerDebouncedSync()
-  }
-
-  // Keyboard adjustment controls
+  // Keyboard adjustment controls (nudge)
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    const targetRegion = activeBox === 'placement' ? currentPlacement : cleanupConfig.region
-    if (!targetRegion) return
-
     const step = e.shiftKey ? 0.02 : 0.005
-    let { x, y, width, height } = targetRegion
+    let { x, y, width, height } = currentPlacement
 
     if (e.key === 'ArrowLeft') {
       e.preventDefault()
@@ -508,32 +350,21 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
     }
 
     const clamped = clampNormalizedRect({ x, y, width, height })
-
-    if (activeBox === 'placement') {
-      setCurrentPlacement(clamped)
-      setHasUnsavedPlacement(true)
-    } else {
-      setCleanupConfig((prev) => ({ ...prev, region: clamped }))
-      setHasUnsavedCleanup(true)
-    }
+    setCurrentPlacement(clamped)
+    setHasUnsavedPlacement(true)
     setSaveSuccess(false)
-    triggerDebouncedSync()
   }
 
   // Explicit Save Action
   const handleSaveAll = async () => {
-    if (!currentPlacement) return
     setIsSaving(true)
     setErrorMessage(null)
     try {
       await onSavePlacement(currentPlacement)
-      await onSaveCleanup(cleanupConfig)
       await onSaveTypography(typography)
       setHasUnsavedPlacement(false)
-      setHasUnsavedCleanup(false)
       setHasUnsavedTypography(false)
       setSaveSuccess(true)
-      setBackendSyncVersion((v) => v + 1)
     } catch (err: unknown) {
       if (err instanceof Error) {
         setErrorMessage(err.message)
@@ -553,41 +384,23 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
       setCurrentPlacement({ x: 0.2, y: 0.45, width: 0.6, height: 0.12 })
     }
 
-    if (savedCleanup) {
-      setCleanupConfig(savedCleanup)
-    } else {
-      setCleanupConfig({
-        mode: 'solid',
-        region: savedPlacement || { x: 0.2, y: 0.45, width: 0.6, height: 0.12 },
-        sample_border_color: true,
-        custom_color: '#ffffff',
-        inpaint_radius: 3,
-      })
-    }
-
     if (savedTypography) {
       setTypography(savedTypography)
     }
 
     setHasUnsavedPlacement(false)
-    setHasUnsavedCleanup(false)
     setHasUnsavedTypography(false)
     setSaveSuccess(false)
-    triggerDebouncedSync()
   }
 
-  // Batch analysis
+  // Trigger batch analysis
   const handleRunBatchAnalysis = async () => {
     setIsAnalyzing(true)
     setErrorMessage(null)
     try {
-      if (currentPlacement) {
-        await onSavePlacement(currentPlacement)
-      }
-      await onSaveCleanup(cleanupConfig)
+      await onSavePlacement(currentPlacement)
       await onSaveTypography(typography)
       setHasUnsavedPlacement(false)
-      setHasUnsavedCleanup(false)
       setHasUnsavedTypography(false)
 
       const report = await analyzeTypography(jobId)
@@ -603,19 +416,18 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
     }
   }
 
-  // Calculate live Konva font size proportional to canvas vs template height
+  // Scale factor from template original coordinate space to browser canvas pixels
   const scaleFactor = stageSize.height / (template.height || stageSize.height)
-  const clientFontSize = Math.max(12, Math.round(typography.preferred_font_size * scaleFactor))
-  const clientFontFamily = FONT_ID_TO_FAMILY[typography.font_id] || 'sans-serif'
 
-  // Determine which background image to show on canvas
-  let currentBgImage: HTMLImageElement | null = originalImageObj
-  if (viewMode === 'cleaned' && cleanedImageObj) {
-    currentBgImage = cleanedImageObj
-  } else if (viewMode === 'personalized') {
-    // Show cleaned background beneath live personalized text overlay, or fallback to authoritative render
-    currentBgImage = cleanedImageObj || authoritativeImageObj || originalImageObj
-  }
+  // Use authoritative backend fitted font size if available, scaled to display canvas; otherwise approximate
+  const effectiveFontSizeTemplate = backendFittedSize ?? typography.preferred_font_size
+  const displayFontSize = Math.max(10, Math.round(effectiveFontSizeTemplate * scaleFactor))
+  const displayFontFamily = FONT_ID_TO_FAMILY[typography.font_id] || 'sans-serif'
+
+  // Quick preset samples for convenient preview
+  const shortestName = batchReport?.shortest_name || 'Ava'
+  const longestName = batchReport?.longest_name_by_chars || 'Dr. Alexander Montgomery-Cunningham III'
+  const widestName = batchReport?.widest_name || null
 
   return (
     <div className="space-y-6">
@@ -631,13 +443,13 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
             <span>Back to Ingestion</span>
           </button>
           <h2 className="text-xl font-semibold text-slate-900 tracking-tight flex items-center gap-2">
-            <span>Live WYSIWYG Certificate Studio</span>
-            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-              Milestone 4.1
+            <span>Certificate Placement & Typography Studio</span>
+            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+              Auto-Fit Active
             </span>
           </h2>
           <p className="text-xs text-slate-500">
-            Erase existing template names, position the new recipient area, and preview typography in real time.
+            Position the recipient name region. Text auto-fits dynamically to prevent clipping on long names.
           </p>
         </div>
 
@@ -669,7 +481,7 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
           <button
             type="button"
             onClick={handleSaveAll}
-            disabled={isSaving || !currentPlacement}
+            disabled={isSaving}
             className="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium shadow-sm transition-colors flex items-center gap-1.5 disabled:opacity-50"
           >
             <Save className="h-3.5 w-3.5" />
@@ -699,111 +511,61 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
         </div>
       )}
 
-      {/* Editor Main Grid */}
+      {/* Editor Grid: Left 3 cols (Stationary Viewport) | Right 1 col (Controls) */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Left 3 cols: Unified Live Canvas */}
+        {/* Left Column: Stable Certificate Viewport */}
         <div
           ref={containerRef}
           tabIndex={0}
           onKeyDown={handleKeyDown}
           className="lg:col-span-3 rounded-xl border border-slate-200 bg-slate-900/5 p-4 flex flex-col items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 select-none"
         >
-          {/* Top Control Bar: View Switcher & Region Selector */}
-          <div className="w-full flex flex-wrap items-center justify-between pb-3 mb-3 border-b border-slate-200/60 gap-3">
-            {/* View Mode Pills */}
-            <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-200 shadow-xs">
-              <span className="text-[11px] font-semibold text-slate-400 px-2 uppercase tracking-wider">
-                View:
+          {/* Top Status Bar: Static height to eliminate vertical jumping */}
+          <div className="w-full h-8 flex items-center justify-between pb-2 mb-2 border-b border-slate-200/60 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-slate-700 flex items-center gap-1">
+                <Move className="h-3.5 w-3.5 text-indigo-600" />
+                <span>Recipient Name Placement Area</span>
               </span>
-              <button
-                type="button"
-                onClick={() => setViewMode('personalized')}
-                className={`px-3 py-1 rounded-md text-xs font-medium flex items-center gap-1.5 transition-all ${
-                  viewMode === 'personalized'
-                    ? 'bg-indigo-600 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Sparkles className="h-3.5 w-3.5" />
-                <span>Personalized</span>
-              </button>
 
-              <button
-                type="button"
-                onClick={() => setViewMode('cleaned')}
-                className={`px-3 py-1 rounded-md text-xs font-medium flex items-center gap-1.5 transition-all ${
-                  viewMode === 'cleaned'
-                    ? 'bg-indigo-600 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Eraser className="h-3.5 w-3.5" />
-                <span>Cleaned</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setViewMode('original')}
-                className={`px-3 py-1 rounded-md text-xs font-medium flex items-center gap-1.5 transition-all ${
-                  viewMode === 'original'
-                    ? 'bg-indigo-600 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Eye className="h-3.5 w-3.5" />
-                <span>Original</span>
-              </button>
+              {isCalculatingLayout && (
+                <span className="inline-flex items-center gap-1 text-[11px] text-indigo-600 font-medium">
+                  <RefreshCw className="h-3 w-3 animate-spin" />
+                  <span>Auto-fitting...</span>
+                </span>
+              )}
             </div>
 
-            {/* Active Box Selector (Placement vs Cleanup) */}
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-200 shadow-xs">
-                <span className="text-[11px] font-semibold text-slate-400 px-2 uppercase tracking-wider">
-                  Target Box:
+            <div className="flex items-center gap-2 text-[11px]">
+              {backendFittedSize && (
+                <span className="font-mono text-slate-600 bg-white px-2 py-0.5 rounded border border-slate-200">
+                  Fitted: <strong>{backendFittedSize}px</strong>
+                  {backendFittedSize < typography.preferred_font_size && (
+                    <span className="text-amber-600 ml-1">
+                      (scaled from {typography.preferred_font_size}px)
+                    </span>
+                  )}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setActiveBox('placement')}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium flex items-center gap-1.5 transition-all ${
-                    activeBox === 'placement'
-                      ? 'bg-indigo-50 text-indigo-700 font-semibold border border-indigo-200'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <span className="h-2 w-2 rounded-full bg-indigo-600" />
-                  <span>Name Region</span>
-                </button>
+              )}
 
-                <button
-                  type="button"
-                  onClick={() => setActiveBox('cleanup')}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium flex items-center gap-1.5 transition-all ${
-                    activeBox === 'cleanup'
-                      ? 'bg-rose-50 text-rose-700 font-semibold border border-rose-200'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <span className="h-2 w-2 rounded-full bg-rose-500" />
-                  <span>Cleanup Region</span>
-                </button>
-              </div>
-
-              {isBackendSyncing && (
-                <span className="text-[11px] text-indigo-600 flex items-center gap-1 animate-pulse">
-                  <RefreshCw className="h-3 w-3 animate-spin" />
-                  <span>Syncing...</span>
+              {!textFits && (
+                <span className="inline-flex items-center gap-1 text-rose-600 font-semibold bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                  <AlertTriangle className="h-3 w-3" />
+                  <span>Overflow Warning</span>
                 </span>
               )}
             </div>
           </div>
 
-          {/* Unified Live Canvas */}
+          {/* Fixed-Aspect-Ratio Canvas Box (Completely stationary) */}
           <div
-            className="relative shadow-md rounded-lg overflow-hidden bg-white border border-slate-300"
+            className="relative shadow-md rounded-lg overflow-hidden bg-white border border-slate-300 shrink-0"
             style={{ width: stageSize.width, height: stageSize.height }}
           >
+            {/* Loading Overlay (Absolute, zero layout shift) */}
             {!imageLoaded && (
-              <div className="absolute inset-0 flex items-center justify-center bg-slate-100 text-slate-400 text-xs font-medium">
+              <div className="absolute inset-0 flex items-center justify-center bg-slate-100 text-slate-400 text-xs font-medium z-10">
+                <RefreshCw className="h-4 w-4 animate-spin mr-2 text-indigo-600" />
                 Loading certificate canvas...
               </div>
             )}
@@ -811,277 +573,114 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
             <Stage
               width={stageSize.width}
               height={stageSize.height}
-              onMouseDown={handleStageMouseDown}
-              onMouseMove={handleStageMouseMove}
-              onMouseUp={handleStageMouseUp}
-              onTouchStart={handleStageMouseDown}
-              onTouchMove={handleStageMouseMove}
-              onTouchEnd={handleStageMouseUp}
             >
               <Layer>
-                {/* 1. Background Image: Cleaned, Original, or Rendered Authoritative */}
-                {currentBgImage && (
+                {/* 1. Base Certificate Image (Stationary) */}
+                {imageObj && (
                   <KonvaImage
-                    image={currentBgImage}
+                    image={imageObj}
                     width={stageSize.width}
                     height={stageSize.height}
                     name="background-image"
-                    listening={true}
+                    listening={false}
                   />
                 )}
 
-                {/* 2. Cleanup Box (Red/Amber dashed outline) */}
-                {cleanupConfig.region && cleanupConfig.mode !== 'none' && (
-                  <Group>
-                    <Rect
-                      ref={cleanupRectRef}
-                      x={cleanupCanvasRect.x}
-                      y={cleanupCanvasRect.y}
-                      width={cleanupCanvasRect.width}
-                      height={cleanupCanvasRect.height}
-                      fill={activeBox === 'cleanup' ? 'rgba(239, 68, 68, 0.12)' : 'rgba(239, 68, 68, 0.04)'}
-                      stroke="#ef4444"
-                      strokeWidth={activeBox === 'cleanup' ? 2 : 1.5}
-                      dash={[4, 4]}
-                      draggable={activeBox === 'cleanup'}
-                      dragBoundFunc={(pos) => ({
-                        x: Math.max(0, Math.min(stageSize.width - cleanupCanvasRect.width, pos.x)),
-                        y: Math.max(0, Math.min(stageSize.height - cleanupCanvasRect.height, pos.y)),
-                      })}
-                      onClick={() => setActiveBox('cleanup')}
-                      onTap={() => setActiveBox('cleanup')}
-                      onDragEnd={handleCleanupDragEnd}
-                      onTransformEnd={handleCleanupTransformEnd}
-                    />
-                  </Group>
-                )}
+                {/* 2. Recipient Name Bounding Box & Live Text */}
+                <Group>
+                  <Rect
+                    ref={rectRef}
+                    x={canvasRect.x}
+                    y={canvasRect.y}
+                    width={canvasRect.width}
+                    height={canvasRect.height}
+                    fill="rgba(99, 102, 241, 0.08)"
+                    stroke="#4f46e5"
+                    strokeWidth={1.5}
+                    dash={[6, 4]}
+                    draggable={true}
+                    dragBoundFunc={(pos) => ({
+                      x: Math.max(0, Math.min(stageSize.width - canvasRect.width, pos.x)),
+                      y: Math.max(0, Math.min(stageSize.height - canvasRect.height, pos.y)),
+                    })}
+                    onDragEnd={handleDragEnd}
+                    onTransformEnd={handleTransformEnd}
+                  />
 
-                {/* 3. Name Placement Box (Indigo outline) */}
-                {currentPlacement && (
-                  <Group>
-                    <Rect
-                      ref={placementRectRef}
-                      x={placementCanvasRect.x}
-                      y={placementCanvasRect.y}
-                      width={placementCanvasRect.width}
-                      height={placementCanvasRect.height}
-                      fill={activeBox === 'placement' ? 'rgba(99, 102, 241, 0.10)' : 'transparent'}
-                      stroke="#4f46e5"
-                      strokeWidth={activeBox === 'placement' ? 2 : 1}
-                      dash={[6, 4]}
-                      draggable={activeBox === 'placement'}
-                      dragBoundFunc={(pos) => ({
-                        x: Math.max(0, Math.min(stageSize.width - placementCanvasRect.width, pos.x)),
-                        y: Math.max(0, Math.min(stageSize.height - placementCanvasRect.height, pos.y)),
-                      })}
-                      onClick={() => setActiveBox('placement')}
-                      onTap={() => setActiveBox('placement')}
-                      onDragEnd={handlePlacementDragEnd}
-                      onTransformEnd={handlePlacementTransformEnd}
-                    />
+                  {/* 3. Personalized Name with loaded font & live auto-fit sizing */}
+                  <KonvaText
+                    x={canvasRect.x}
+                    y={canvasRect.y}
+                    width={canvasRect.width}
+                    height={canvasRect.height}
+                    text={selectedSample}
+                    fontSize={displayFontSize}
+                    fontFamily={displayFontFamily}
+                    fill={typography.text_color}
+                    align={typography.alignment}
+                    verticalAlign="middle"
+                    listening={false}
+                  />
 
-                    {/* 4. Live WYSIWYG Personalized Text with loaded @font-face font */}
-                    {viewMode === 'personalized' && (
-                      <KonvaText
-                        x={placementCanvasRect.x}
-                        y={placementCanvasRect.y}
-                        width={placementCanvasRect.width}
-                        height={placementCanvasRect.height}
-                        text={selectedSample}
-                        fontSize={clientFontSize}
-                        fontFamily={clientFontFamily}
-                        fill={typography.text_color}
-                        align={typography.alignment}
-                        verticalAlign="middle"
-                        listening={false}
-                      />
-                    )}
-                  </Group>
-                )}
-
-                {/* 5. Transformer for Active Box */}
-                <Transformer
-                  ref={trRef}
-                  rotateEnabled={false}
-                  keepRatio={false}
-                  enabledAnchors={[
-                    'top-left',
-                    'top-right',
-                    'bottom-left',
-                    'bottom-right',
-                    'middle-left',
-                    'middle-right',
-                  ]}
-                  boundBoxFunc={(oldBox, newBox) => {
-                    if (newBox.width < 15 || newBox.height < 15) return oldBox
-                    if (
-                      newBox.x < 0 ||
-                      newBox.y < 0 ||
-                      newBox.x + newBox.width > stageSize.width ||
-                      newBox.y + newBox.height > stageSize.height
-                    ) {
-                      return oldBox
-                    }
-                    return newBox
-                  }}
-                />
+                  {/* 4. Konva Transformer with visible resize handles */}
+                  <Transformer
+                    ref={trRef}
+                    rotateEnabled={false}
+                    keepRatio={false}
+                    enabledAnchors={[
+                      'top-left',
+                      'top-right',
+                      'bottom-left',
+                      'bottom-right',
+                      'middle-left',
+                      'middle-right',
+                    ]}
+                    boundBoxFunc={(oldBox, newBox) => {
+                      if (newBox.width < 25 || newBox.height < 15) return oldBox
+                      if (
+                        newBox.x < 0 ||
+                        newBox.y < 0 ||
+                        newBox.x + newBox.width > stageSize.width ||
+                        newBox.y + newBox.height > stageSize.height
+                      ) {
+                        return oldBox
+                      }
+                      return newBox
+                    }}
+                  />
+                </Group>
               </Layer>
             </Stage>
           </div>
 
-          {/* Interaction Guide */}
-          <div className="mt-3 text-[11px] text-slate-500 flex flex-wrap items-center justify-center gap-4">
+          {/* Bottom Interaction Guide: Static height */}
+          <div className="mt-3 h-5 text-[11px] text-slate-500 flex items-center justify-center gap-4">
             <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-indigo-600 inline-block" /> Indigo: Recipient Name Box
+              <Move className="h-3 w-3 text-indigo-500" /> Drag box to position
             </span>
             <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-rose-500 inline-block" /> Red: Placeholder Cleanup Box
+              <Maximize2 className="h-3 w-3 text-indigo-500" /> Drag handles to resize
             </span>
-            <span className="flex items-center gap-1">
-              <Move className="h-3 w-3" /> Drag active box to move
-            </span>
-            <span className="flex items-center gap-1">
-              <Maximize2 className="h-3 w-3" /> Handles to resize
-            </span>
-            <span>⌨️ Arrow keys nudge</span>
+            <span>⌨️ Arrow keys nudge (Shift for larger steps)</span>
           </div>
+
+          {/* Inline Auto-Fit Warnings (fixed min-height to prevent jumping) */}
+          {layoutWarnings.length > 0 && (
+            <div className="mt-2 w-full p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center gap-1.5">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+              <span>{layoutWarnings[0]}</span>
+            </div>
+          )}
         </div>
 
-        {/* Right 1 col: Controls Sidebar */}
+        {/* Right Column: Clean, Intuitive Controls Sidebar */}
         <div className="space-y-4">
-          {/* Section 1: Placeholder Removal Controls */}
-          <div className="p-4 rounded-xl border border-slate-200 bg-white shadow-xs space-y-3">
-            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-              <Eraser className="h-4 w-4 text-rose-600" />
-              <h3 className="text-xs font-semibold text-slate-900">
-                Placeholder Removal
-              </h3>
-            </div>
-
-            {/* Cleanup Mode Selector */}
-            <div>
-              <label className="text-xs font-semibold text-slate-800 block mb-1">
-                Erase Mode
-              </label>
-              <select
-                value={cleanupConfig.mode}
-                onChange={(e) => {
-                  setCleanupConfig((prev) => ({
-                    ...prev,
-                    mode: e.target.value as CleanupMode,
-                  }))
-                  setHasUnsavedCleanup(true)
-                  setSaveSuccess(false)
-                  triggerDebouncedSync()
-                }}
-                className="w-full bg-white border border-slate-300 rounded-md py-1.5 px-2.5 text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 shadow-xs"
-              >
-                <option value="solid">Solid Background Fill</option>
-                <option value="inpaint">OpenCV Telea Inpaint (Textures)</option>
-                <option value="pdf_redact">PyMuPDF Vector Text Redact (PDF)</option>
-                <option value="none">None (Keep Original)</option>
-              </select>
-            </div>
-
-            {/* Cleanup Mode Detailed Settings */}
-            {cleanupConfig.mode === 'solid' && (
-              <div className="space-y-2 pt-1 border-t border-slate-100">
-                <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={cleanupConfig.sample_border_color}
-                    onChange={(e) => {
-                      setCleanupConfig((prev) => ({
-                        ...prev,
-                        sample_border_color: e.target.checked,
-                      }))
-                      setHasUnsavedCleanup(true)
-                      setSaveSuccess(false)
-                      triggerDebouncedSync()
-                    }}
-                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                  />
-                  <span>Auto-sample border background color</span>
-                </label>
-
-                {!cleanupConfig.sample_border_color && (
-                  <div>
-                    <label className="text-[11px] font-semibold text-slate-700 block mb-1">
-                      Custom Fill Color
-                    </label>
-                    <div className="flex items-center gap-2 border border-slate-300 rounded-md p-1 bg-white">
-                      <input
-                        type="color"
-                        value={cleanupConfig.custom_color || '#ffffff'}
-                        onChange={(e) => {
-                          setCleanupConfig((prev) => ({
-                            ...prev,
-                            custom_color: e.target.value,
-                          }))
-                          setHasUnsavedCleanup(true)
-                          setSaveSuccess(false)
-                          triggerDebouncedSync()
-                        }}
-                        className="h-6 w-8 rounded border-none cursor-pointer p-0 bg-transparent"
-                      />
-                      <span className="text-[11px] font-mono text-slate-700 uppercase">
-                        {cleanupConfig.custom_color || '#ffffff'}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {cleanupConfig.mode === 'inpaint' && (
-              <div className="space-y-1.5 pt-1 border-t border-slate-100">
-                <div className="flex justify-between text-xs">
-                  <span className="font-semibold text-slate-800">Inpaint Radius</span>
-                  <span className="font-mono text-slate-600">{cleanupConfig.inpaint_radius}px</span>
-                </div>
-                <input
-                  type="range"
-                  min="1"
-                  max="10"
-                  step="1"
-                  value={cleanupConfig.inpaint_radius}
-                  onChange={(e) => {
-                    setCleanupConfig((prev) => ({
-                      ...prev,
-                      inpaint_radius: Number(e.target.value),
-                    }))
-                    setHasUnsavedCleanup(true)
-                    setSaveSuccess(false)
-                    triggerDebouncedSync()
-                  }}
-                  className="w-full accent-rose-600 cursor-pointer"
-                />
-                <span className="text-[10px] text-slate-400 block">
-                  Telea algorithm reconstructs underlying parchment texture.
-                </span>
-              </div>
-            )}
-
-            <button
-              type="button"
-              onClick={() => setActiveBox('cleanup')}
-              className={`w-full py-1.5 rounded-lg text-xs font-medium border flex items-center justify-center gap-1.5 transition-colors ${
-                activeBox === 'cleanup'
-                  ? 'bg-rose-50 border-rose-300 text-rose-700'
-                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <Eraser className="h-3.5 w-3.5" />
-              <span>{activeBox === 'cleanup' ? 'Editing Cleanup Box' : 'Select Cleanup Box'}</span>
-            </button>
-          </div>
-
-          {/* Section 2: Typography Controls Card */}
+          {/* Section 1: Typography Controls Card */}
           <div className="p-4 rounded-xl border border-slate-200 bg-white shadow-xs space-y-4">
             <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
               <Type className="h-4 w-4 text-indigo-600" />
               <h3 className="text-xs font-semibold text-slate-900">
-                Typography Controls
+                Typography & Fitting
               </h3>
             </div>
 
@@ -1096,7 +695,6 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
                   setTypography({ ...typography, font_id: e.target.value })
                   setHasUnsavedTypography(true)
                   setSaveSuccess(false)
-                  triggerDebouncedSync()
                 }}
                 className="w-full bg-white border border-slate-300 rounded-md py-1.5 px-2.5 text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 shadow-xs"
               >
@@ -1122,7 +720,6 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
                       setTypography({ ...typography, text_color: e.target.value })
                       setHasUnsavedTypography(true)
                       setSaveSuccess(false)
-                      triggerDebouncedSync()
                     }}
                     className="h-6 w-8 rounded border-none cursor-pointer p-0 bg-transparent"
                   />
@@ -1145,7 +742,6 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
                     })
                     setHasUnsavedTypography(true)
                     setSaveSuccess(false)
-                    triggerDebouncedSync()
                   }}
                   className="w-full bg-white border border-slate-300 rounded-md py-1.5 px-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 shadow-xs"
                 >
@@ -1160,12 +756,12 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
             <div className="space-y-3 pt-1">
               <div>
                 <div className="flex justify-between text-xs mb-1">
-                  <span className="font-semibold text-slate-800">Preferred Size</span>
+                  <span className="font-semibold text-slate-800">Preferred Font Size</span>
                   <span className="font-mono text-slate-600">{typography.preferred_font_size}px</span>
                 </div>
                 <input
                   type="range"
-                  min="20"
+                  min="24"
                   max="120"
                   step="2"
                   value={typography.preferred_font_size}
@@ -1176,20 +772,22 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
                     })
                     setHasUnsavedTypography(true)
                     setSaveSuccess(false)
-                    triggerDebouncedSync()
                   }}
                   className="w-full accent-indigo-600 cursor-pointer"
                 />
+                <span className="text-[10px] text-slate-400 block mt-0.5">
+                  Target size for normal names; long names will auto-shrink smoothly.
+                </span>
               </div>
 
               <div>
                 <div className="flex justify-between text-xs mb-1">
-                  <span className="font-semibold text-slate-800">Minimum Readable</span>
+                  <span className="font-semibold text-slate-800">Minimum Readable Size</span>
                   <span className="font-mono text-slate-600">{typography.min_font_size}px</span>
                 </div>
                 <input
                   type="range"
-                  min="10"
+                  min="12"
                   max="40"
                   step="2"
                   value={typography.min_font_size}
@@ -1200,7 +798,6 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
                     })
                     setHasUnsavedTypography(true)
                     setSaveSuccess(false)
-                    triggerDebouncedSync()
                   }}
                   className="w-full accent-indigo-600 cursor-pointer"
                 />
@@ -1209,99 +806,89 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
                 </span>
               </div>
             </div>
-
-            <button
-              type="button"
-              onClick={() => setActiveBox('placement')}
-              className={`w-full py-1.5 rounded-lg text-xs font-medium border flex items-center justify-center gap-1.5 transition-colors ${
-                activeBox === 'placement'
-                  ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
-                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <Move className="h-3.5 w-3.5" />
-              <span>{activeBox === 'placement' ? 'Editing Name Box' : 'Select Name Box'}</span>
-            </button>
           </div>
 
-          {/* Section 3: Participant Sample Selection */}
+          {/* Section 2: Real Participant Preview Selector */}
           <div className="p-4 rounded-xl border border-slate-200 bg-white shadow-xs space-y-3">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
               <UserCheck className="h-4 w-4 text-indigo-600" />
               <h3 className="text-xs font-semibold text-slate-900">
-                Preview Participant
+                Participant Preview
               </h3>
             </div>
 
-            <div className="space-y-1.5 text-xs">
+            {/* Quick Presets: Short, Long, Widest */}
+            <div className="grid grid-cols-2 gap-2 text-xs">
               <button
                 type="button"
-                onClick={() => {
-                  setSelectedSample(shortSample)
-                  setBackendSyncVersion((v) => v + 1)
-                }}
-                className={`w-full text-left p-2 rounded-lg border transition-colors flex items-center justify-between ${
-                  selectedSample === shortSample
+                onClick={() => setSelectedSample(shortestName)}
+                className={`p-2 rounded-lg border text-left transition-colors ${
+                  selectedSample === shortestName
                     ? 'border-indigo-500 bg-indigo-50/50 text-indigo-900'
-                    : 'border-slate-100 hover:bg-slate-50 text-slate-700'
+                    : 'border-slate-200 hover:bg-slate-50 text-slate-700'
                 }`}
               >
-                <span className="font-medium">Short Name</span>
-                <span className="font-mono text-[11px] text-slate-500">{shortSample}</span>
+                <span className="text-[10px] text-slate-500 block">Short Name</span>
+                <span className="font-medium truncate block">{shortestName}</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => {
-                  setSelectedSample(longSample)
-                  setBackendSyncVersion((v) => v + 1)
-                }}
-                className={`w-full text-left p-2 rounded-lg border transition-colors flex items-center justify-between ${
-                  selectedSample === longSample
+                onClick={() => setSelectedSample(longestName)}
+                className={`p-2 rounded-lg border text-left transition-colors ${
+                  selectedSample === longestName
                     ? 'border-indigo-500 bg-indigo-50/50 text-indigo-900'
-                    : 'border-slate-100 hover:bg-slate-50 text-slate-700'
+                    : 'border-slate-200 hover:bg-slate-50 text-slate-700'
                 }`}
               >
-                <span className="font-medium">Long Name</span>
-                <span className="font-mono text-[11px] text-slate-500 truncate max-w-[140px]">
-                  {longSample}
-                </span>
+                <span className="text-[10px] text-slate-500 block">Long Name</span>
+                <span className="font-medium truncate block">{longestName}</span>
               </button>
-
-              {participants.length > 0 && (
-                <div>
-                  <label className="text-[11px] font-semibold text-slate-700 block mt-2 mb-1">
-                    Select from CSV ({participants.length} total):
-                  </label>
-                  <select
-                    value={selectedSample}
-                    onChange={(e) => {
-                      setSelectedSample(e.target.value)
-                      setBackendSyncVersion((v) => v + 1)
-                    }}
-                    className="w-full bg-white border border-slate-300 rounded-md py-1.5 px-2 text-xs text-slate-800 shadow-xs"
-                  >
-                    {participants
-                      .filter((p) => p.is_valid && p.name)
-                      .slice(0, 30)
-                      .map((p) => (
-                        <option key={p.row_number} value={p.name}>
-                          #{p.row_number}: {p.name}
-                        </option>
-                      ))}
-                  </select>
-                </div>
-              )}
             </div>
+
+            {widestName && widestName !== longestName && (
+              <button
+                type="button"
+                onClick={() => setSelectedSample(widestName)}
+                className={`w-full p-2 rounded-lg border text-left text-xs transition-colors ${
+                  selectedSample === widestName
+                    ? 'border-indigo-500 bg-indigo-50/50 text-indigo-900'
+                    : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                }`}
+              >
+                <span className="text-[10px] text-slate-500 block">Widest Rendered Name</span>
+                <span className="font-medium truncate block">{widestName}</span>
+              </button>
+            )}
+
+            {/* Full CSV Participant Dropdown */}
+            {validParticipants.length > 0 && (
+              <div>
+                <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+                  All CSV Participants ({validParticipants.length}):
+                </label>
+                <select
+                  value={selectedSample}
+                  onChange={(e) => setSelectedSample(e.target.value)}
+                  className="w-full bg-white border border-slate-300 rounded-md py-1.5 px-2 text-xs text-slate-800 shadow-xs focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                >
+                  {validParticipants.slice(0, 50).map((p) => (
+                    <option key={p.row_number} value={p.name}>
+                      #{p.row_number}: {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
-          {/* Section 4: Batch Typography Analysis Card */}
+          {/* Section 3: Batch Typography Fitting Analysis */}
           <div className="p-4 rounded-xl border border-slate-200 bg-white shadow-xs space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <BarChart3 className="h-4 w-4 text-indigo-600" />
                 <h3 className="text-xs font-semibold text-slate-900">
-                  Batch Fitting Analysis
+                  Batch Auto-Fit Analysis
                 </h3>
               </div>
               <button
@@ -1317,13 +904,21 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
 
             {batchReport ? (
               <div className="space-y-2 text-xs">
-                <div className="grid grid-cols-2 gap-2 text-center">
+                <div className="grid grid-cols-3 gap-1.5 text-center">
                   <div className="p-2 rounded bg-slate-50 border border-slate-200/80">
-                    <span className="text-[10px] text-slate-500 block">Total Analyzed</span>
+                    <span className="text-[10px] text-slate-500 block">Total</span>
                     <span className="font-semibold text-slate-900 font-mono">
                       {batchReport.total_analyzed}
                     </span>
                   </div>
+
+                  <div className="p-2 rounded bg-indigo-50/60 border border-indigo-100 text-indigo-900">
+                    <span className="text-[10px] text-indigo-600 block">Resized</span>
+                    <span className="font-semibold font-mono">
+                      {batchReport.reduction_count}
+                    </span>
+                  </div>
+
                   <div
                     className={`p-2 rounded border ${
                       batchReport.overflow_count === 0
@@ -1338,25 +933,18 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
                   </div>
                 </div>
 
-                {batchReport.widest_name && (
-                  <div className="p-2 rounded bg-slate-50 border border-slate-200/80 text-[11px]">
-                    <span className="text-slate-500 block">Widest Name:</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedSample(batchReport.widest_name || '')
-                        setBackendSyncVersion((v) => v + 1)
-                      }}
-                      className="font-medium text-indigo-600 hover:underline truncate block w-full text-left mt-0.5"
-                    >
-                      {batchReport.widest_name} →
-                    </button>
+                <div className="p-2 rounded-lg bg-slate-50 border border-slate-200 text-[11px] text-slate-600 space-y-1">
+                  <div className="flex justify-between">
+                    <span>Fit status:</span>
+                    <strong className={batchReport.all_fit ? 'text-emerald-700' : 'text-rose-700'}>
+                      {batchReport.all_fit ? 'All names fit safely' : `${batchReport.overflow_count} names overflow`}
+                    </strong>
                   </div>
-                )}
+                </div>
 
                 {batchReport.warnings.length > 0 && (
                   <div className="p-2 rounded bg-amber-50 border border-amber-200 text-amber-800 text-[11px] space-y-1">
-                    {batchReport.warnings.map((w, i) => (
+                    {batchReport.warnings.slice(0, 3).map((w, i) => (
                       <div key={i} className="flex items-start gap-1">
                         <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5 text-amber-600" />
                         <span>{w}</span>
@@ -1367,8 +955,8 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
               </div>
             ) : (
               <p className="text-[11px] text-slate-500 leading-relaxed">
-                Run batch analysis to verify that all participant names in your CSV fit comfortably
-                and check for any unsupported glyphs.
+                Click <strong>Analyze</strong> to verify that every participant name in your CSV fits
+                comfortably without exceeding boundaries.
               </p>
             )}
           </div>

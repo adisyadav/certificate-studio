@@ -13,27 +13,27 @@ Certificate Studio is organized as a clean, decoupled monorepo:
 
 ---
 
-## Current Status: Milestone 4.1 (Live WYSIWYG Editor and Placeholder Removal)
+## Current Status: Milestone 4.2 (Complete Editor Stabilization & Intelligent Auto-Fit)
 
-### Features Implemented
-1. **Live WYSIWYG Single-Canvas Experience**:
-   - Eliminated the split between "placement canvas" and "authoritative preview".
-   - Immediate frontend typography visualization using bundled TrueType font files loaded via `@font-face` directly inside React Konva.
-   - Real-time instant updates on the main certificate canvas when font, size, color, alignment, or participant changes.
-   - 250ms debounced background synchronization with the authoritative backend rendering pipeline.
-2. **Dual-Region Independent Architecture**:
-   - **Name Placement Region**: Bounded box (indigo outline) determining where the new recipient name is rendered and fitted.
-   - **Cleanup Region**: Dedicated bounded box (red/dashed outline) marking the placeholder text to be erased on the template.
-   - Either region can be toggled as active and adjusted via mouse drag, resize handles, or arrow keys.
-3. **Non-Destructive Placeholder Removal Engine (`placeholder_removal_service.py`)**:
-   - **Solid Background Fill**: Replaces old text with a uniform background; supports auto-border color sampling or custom HEX color.
-   - **OpenCV Telea Inpainting**: Reconstructs parchment and textured backgrounds seamlessly without blur or discoloration (`cv2.INPAINT_TELEA`).
-   - **PyMuPDF Vector Text Redaction**: Removes underlying vector text streams cleanly from PDF templates (`page.add_redact_annot`).
-   - **Original Preservation**: Original template files are never modified; cleanings are performed non-destructively in-memory and cached per version.
-4. **Canvas View Switching**:
-   - In-canvas view toggle: `Personalized` (default view with cleaned background + live recipient typography), `Cleaned` (template with erased placeholder), and `Original` (untouched uploaded template).
-5. **Session Persistence**:
-   - Full recovery of job session, uploaded assets, selected column, placement, cleanup configuration, and typography across page reloads.
+### Key Specifications & Architecture
+- **V1 Template Requirement**: V1 requires certificate templates with an **EMPTY/BLANK recipient-name area**. All placeholder-removal and cleanup mechanisms have been cleanly removed to eliminate unnecessary complexity.
+- **Fixed-Aspect-Ratio Stationary Viewport**:
+  - The certificate canvas is completely stationary. Zero vertical jumping, zero viewport collapse, zero reflow during participant switching or typography adjustments.
+  - Image instance and canvas boundaries are preserved across font, size, color, and participant changes.
+  - Asynchronous loading and layout calculation indicators are rendered as non-disruptive, fixed-height overlays.
+- **Intelligent Automatic Font Fitting**:
+  - Enabled by default for all participants.
+  - Deterministic binary-search font fitting finds the largest readable size that fits strictly within placement box width and height constraints.
+  - Automatically downsizes long names (e.g. from 64px to 38px) while rendering short names at preferred size.
+  - Never truncates or clips names, and never shrinks below the configured minimum readable size (`min_font_size`).
+- **Typographic Baseline Consistency**:
+  - Center alignment shares identical horizontal and vertical anchor positions across all names.
+  - Font EM ascender/descender metric centering prevents ascenders or descenders (like 'y', 'g', 'j') from vertically displacing names.
+- **Lightweight Authoritative Layout API**:
+  - `GET /api/jobs/{job_id}/layout` computes fitted font size, bounding boxes, and fitting warnings without requiring full image rasterization.
+- **Session Persistence & Backwards Compatibility**:
+  - Persists active job ID, uploaded assets, placement rectangle, typography, and analysis across page reloads.
+  - Safely ignores legacy cleanup fields in older job records without data corruption.
 
 ---
 

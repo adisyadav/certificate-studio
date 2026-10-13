@@ -24,6 +24,22 @@ export interface TypographyConfig {
   alignment: TextAlignment
 }
 
+export interface LayoutBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface TypographyLayoutResult {
+  font_size: number
+  fits: boolean
+  fitted_at_reduced_size: boolean
+  text_bounds: LayoutBounds
+  draw_position: { x: number; y: number }
+  warnings: string[]
+}
+
 export interface ParticipantTypographyAnalysis {
   row_number: number
   name: string
@@ -89,16 +105,6 @@ export interface PlacementRegion {
   height: number
 }
 
-export type CleanupMode = 'none' | 'solid' | 'inpaint' | 'pdf_redact'
-
-export interface CleanupConfig {
-  mode: CleanupMode
-  region: PlacementRegion | null
-  sample_border_color: boolean
-  custom_color: string | null
-  inpaint_radius: number
-}
-
 export interface JobResponse {
   job_id: string
   created_at: string
@@ -106,7 +112,7 @@ export interface JobResponse {
   template: TemplateMetadata | null
   csv_summary: CsvSummary | null
   placement: PlacementRegion | null
-  cleanup: CleanupConfig | null
+  cleanup?: unknown
   typography: TypographyConfig | null
   batch_analysis: BatchTypographyReport | null
   participants_preview: ParticipantRecord[]
@@ -270,6 +276,30 @@ export async function saveTypography(
   return response.json()
 }
 
+export async function fetchTextLayout(
+  jobId: string,
+  params?: { participantRow?: number; sampleText?: string }
+): Promise<TypographyLayoutResult> {
+  const url = new URL(`${API_BASE_URL}/api/jobs/${jobId}/layout`)
+  if (params?.participantRow) {
+    url.searchParams.set('participant_row', String(params.participantRow))
+  }
+  if (params?.sampleText) {
+    url.searchParams.set('sample_text', params.sampleText)
+  }
+
+  const response = await fetch(url.toString(), {
+    headers: { Accept: 'application/json' },
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null)
+    throw new ApiError(errorData?.detail || `Failed to calculate layout (${response.status})`, response.status)
+  }
+
+  return response.json()
+}
+
 export async function analyzeTypography(jobId: string): Promise<BatchTypographyReport> {
   const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/analyze-typography`, {
     method: 'POST',
@@ -282,35 +312,6 @@ export async function analyzeTypography(jobId: string): Promise<BatchTypographyR
   }
 
   return response.json()
-}
-
-export async function saveCleanup(
-  jobId: string,
-  cleanup: CleanupConfig
-): Promise<JobResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/cleanup`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    body: JSON.stringify(cleanup),
-  })
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => null)
-    throw new ApiError(errorData?.detail || `Failed to save cleanup (${response.status})`, response.status)
-  }
-
-  return response.json()
-}
-
-export function getCleanedPreviewUrl(jobId: string, v?: number): string {
-  const url = new URL(`${API_BASE_URL}/api/jobs/${jobId}/preview/cleaned`)
-  if (v) {
-    url.searchParams.set('v', String(v))
-  }
-  return url.toString()
 }
 
 export function getRenderedPreviewUrl(
@@ -334,4 +335,3 @@ export function getTemplatePreviewUrl(relativeUrl: string): string {
   if (relativeUrl.startsWith('http')) return relativeUrl
   return `${API_BASE_URL}${relativeUrl}`
 }
-

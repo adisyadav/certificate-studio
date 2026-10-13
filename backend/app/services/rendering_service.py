@@ -1,19 +1,17 @@
 import io
 from pathlib import Path
-from typing import Tuple, Optional
+from typing import Tuple
 from PIL import Image, ImageDraw
 import fitz  # PyMuPDF
 
 from app.schemas.job import TemplateMetadata
 from app.schemas.placement import PlacementRegion
-from app.schemas.cleanup import CleanupConfig, CleanupMode
 from app.schemas.typography import (
     TypographyConfig,
     TypographyLayoutResult,
 )
 from app.services.font_service import FontService
 from app.services.typography_service import TypographyService
-from app.services.placeholder_removal_service import PlaceholderRemovalService
 
 
 class RenderingError(Exception):
@@ -22,42 +20,30 @@ class RenderingError(Exception):
 
 class RenderingService:
     @classmethod
-    def get_cleaned_template_image(
+    def get_template_image(
         cls,
         original_template_path: Path,
-        cleanup_config: CleanupConfig,
         is_pdf: bool = False,
     ) -> Image.Image:
         """
-        Produces a cleaned PIL Image copy based on cleanup_config.
-        Never modifies the original on disk.
+        Produces a high-resolution PIL Image copy of the template.
+        Never modifies the original file on disk.
         """
-        img, _ = PlaceholderRemovalService.clean_template(
-            original_template_path=original_template_path,
-            config=cleanup_config,
-            is_pdf=is_pdf,
-        )
-        return img
+        if not original_template_path.exists():
+            raise RenderingError("Original certificate template file not found.")
 
-    @classmethod
-    def render_cleaned_preview(
-        cls,
-        original_template_path: Path,
-        template_meta: TemplateMetadata,
-        cleanup_config: CleanupConfig,
-    ) -> bytes:
-        """
-        Generates and returns PNG bytes of the cleaned certificate background.
-        """
-        is_pdf = template_meta.format.upper() == "PDF"
-        cleaned_img = cls.get_cleaned_template_image(
-            original_template_path=original_template_path,
-            cleanup_config=cleanup_config,
-            is_pdf=is_pdf,
-        )
-        output_stream = io.BytesIO()
-        cleaned_img.convert("RGB").save(output_stream, format="PNG", optimize=True)
-        return output_stream.getvalue()
+        if is_pdf:
+            doc = fitz.open(str(original_template_path))
+            try:
+                page = doc.load_page(0)
+                # 150 DPI matrix gives crisp high-res canvas rendering
+                pix = page.get_pixmap(matrix=fitz.Matrix(150 / 72.0, 150 / 72.0))
+                return Image.open(io.BytesIO(pix.tobytes(output="png"))).convert("RGBA")
+            finally:
+                doc.close()
+        else:
+            with Image.open(original_template_path) as img:
+                return img.convert("RGBA")
 
     @classmethod
     def render_certificate_preview(
@@ -65,30 +51,23 @@ class RenderingService:
         original_template_path: Path,
         template_meta: TemplateMetadata,
         placement: PlacementRegion,
-        cleanup_config: CleanupConfig,
         typography_config: TypographyConfig,
         participant_name: str,
     ) -> Tuple[bytes, TypographyLayoutResult]:
         """
-        Unified Rendering Pipeline:
-        Original Template -> Cleanup -> Text Layout -> Personalized Rendering
+        Rendering Pipeline:
+        Original Blank Template -> Text Layout & Auto-Fit -> Personalized Rendering.
         Returns (PNG bytes of personalized certificate, TypographyLayoutResult).
         """
-        if not original_template_path.exists():
-            raise RenderingError("Original certificate template file not found.")
-
         is_pdf = template_meta.format.upper() == "PDF"
-
-        # 1. Produce cleaned template image copy
-        base_img = cls.get_cleaned_template_image(
+        base_img = cls.get_template_image(
             original_template_path=original_template_path,
-            cleanup_config=cleanup_config,
             is_pdf=is_pdf,
         )
 
         width, height = base_img.size
 
-        # 2. Authoritative layout in template coordinate space
+        # Authoritative layout in template coordinate space
         layout = TypographyService.calculate_layout(
             text=participant_name,
             config=typography_config,
@@ -97,7 +76,7 @@ class RenderingService:
             target_height=height,
         )
 
-        # 3. Personalized Replacement Text Rendering
+        # Render personalized recipient text
         font = FontService.load_pillow_font(typography_config.font_id, layout.font_size)
         draw = ImageDraw.Draw(base_img)
         draw.text(
