@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react'
+import React, { useRef, useState, useEffect } from 'react'
 import {
   FileUp,
   Image as ImageIcon,
@@ -21,7 +21,16 @@ export const TemplateUploader: React.FC<TemplateUploaderProps> = ({
 }) => {
   const [isDragOver, setIsDragOver] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [imageLoaded, setImageLoaded] = useState(false)
+  const [imageError, setImageError] = useState(false)
+  const [imageRetryCount, setImageRetryCount] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Reset image state when template preview_url changes
+  useEffect(() => {
+    setImageLoaded(false)
+    setImageError(false)
+  }, [template?.preview_url])
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
@@ -88,52 +97,79 @@ export const TemplateUploader: React.FC<TemplateUploaderProps> = ({
   }
 
   return (
-    <div className="rounded-xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs flex flex-col justify-between">
+    <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-xs flex flex-col justify-between">
       <div>
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-700">
-              <ImageIcon className="h-4 w-4" />
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="h-7 w-7 rounded-md bg-slate-100 flex items-center justify-center text-slate-700">
+              <ImageIcon className="h-3.5 w-3.5" />
             </div>
-            <div>
-              <h3 className="text-sm font-semibold text-slate-900 leading-tight">
-                Certificate Template
-              </h3>
-              <p className="text-xs text-slate-500">
-                PNG, JPG, or PDF
-              </p>
-            </div>
+            <h3 className="text-xs font-semibold text-slate-900 leading-tight">
+              Certificate Template
+            </h3>
           </div>
 
           {template && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700">
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-              <span>Ready</span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700">
+              <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+              <span>{imageLoaded ? 'Ready' : 'Uploaded'}</span>
             </span>
           )}
         </div>
 
         {error && (
-          <div className="mb-4 p-3 rounded-lg bg-rose-50 border border-rose-200/80 text-rose-700 text-xs flex items-start gap-2">
-            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-rose-600" />
+          <div className="mb-3 p-2.5 rounded-lg bg-rose-50 border border-rose-200/80 text-rose-700 text-xs flex items-start gap-2">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-rose-600" />
             <div className="leading-relaxed">{error}</div>
           </div>
         )}
 
         {template ? (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {/* Visual Preview Container */}
-            <div className="relative aspect-video rounded-lg border border-slate-200 bg-slate-50/50 overflow-hidden flex items-center justify-center group">
-              <img
-                src={getTemplatePreviewUrl(template.preview_url)}
-                alt="Certificate template preview"
-                className="max-h-full max-w-full object-contain"
-              />
+            <div className="relative h-44 rounded-lg border border-slate-200 bg-slate-50/50 overflow-hidden flex items-center justify-center group">
+              {!imageLoaded && !imageError && (
+                <div className="absolute inset-0 flex items-center justify-center bg-slate-50 text-slate-400 text-xs gap-1.5 z-5">
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin text-slate-600" />
+                  <span>Loading preview...</span>
+                </div>
+              )}
+
+              {imageError ? (
+                <div className="flex flex-col items-center justify-center p-4 text-center text-xs text-slate-500 gap-1.5">
+                  <AlertCircle className="h-5 w-5 text-slate-400" />
+                  <span className="font-medium text-slate-700">Preview currently unavailable</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setImageError(false)
+                      setImageRetryCount((c) => c + 1)
+                    }}
+                    className="text-[11px] text-slate-900 underline hover:text-slate-700 font-medium"
+                  >
+                    Retry loading
+                  </button>
+                </div>
+              ) : (
+                <img
+                  src={getTemplatePreviewUrl(template.preview_url, imageRetryCount || undefined)}
+                  alt="Certificate template preview"
+                  onLoad={() => setImageLoaded(true)}
+                  onError={() => {
+                    setImageError(true)
+                    setImageLoaded(false)
+                  }}
+                  className={`max-h-full max-w-full object-contain transition-opacity duration-200 ${
+                    imageLoaded ? 'opacity-100' : 'opacity-0'
+                  }`}
+                />
+              )}
+
               <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="px-3 py-1.5 rounded-md bg-white text-slate-800 text-xs font-medium shadow-sm hover:bg-slate-50 transition-colors flex items-center gap-1.5"
+                  className="px-3 py-1.5 rounded-md bg-white text-slate-800 text-xs font-medium shadow-xs hover:bg-slate-50 transition-colors flex items-center gap-1.5"
                 >
                   <RefreshCw className="h-3.5 w-3.5 text-slate-600" />
                   <span>Replace File</span>
@@ -143,21 +179,21 @@ export const TemplateUploader: React.FC<TemplateUploaderProps> = ({
 
             {/* Template Metrics */}
             <div className="grid grid-cols-3 gap-2 text-xs">
-              <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100">
-                <span className="text-[11px] text-slate-500 block">Format</span>
+              <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
+                <span className="text-[10px] text-slate-400 block">Format</span>
                 <span className="font-semibold text-slate-800 uppercase font-mono">
                   {template.format}
                 </span>
               </div>
-              <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100">
-                <span className="text-[11px] text-slate-500 block">Dimensions</span>
+              <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
+                <span className="text-[10px] text-slate-400 block">Dimensions</span>
                 <span className="font-semibold text-slate-800 font-mono">
                   {template.width} × {template.height}
                 </span>
               </div>
-              <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100">
-                <span className="text-[11px] text-slate-500 block">Size</span>
-                <span className="font-semibold text-slate-800">
+              <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
+                <span className="text-[10px] text-slate-400 block">Size</span>
+                <span className="font-semibold text-slate-800 font-mono">
                   {formatFileSize(template.file_size_bytes)}
                 </span>
               </div>
@@ -171,7 +207,7 @@ export const TemplateUploader: React.FC<TemplateUploaderProps> = ({
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploading}
-                className="text-slate-700 hover:text-slate-900 font-medium underline disabled:opacity-50"
+                className="text-slate-700 hover:text-slate-900 font-medium underline disabled:opacity-50 text-[11px]"
               >
                 Change
               </button>

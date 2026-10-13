@@ -268,30 +268,52 @@ export async function fetchFonts(): Promise<FontInfo[]> {
 }
 
 export async function createJob(): Promise<JobResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/jobs`, {
-    method: 'POST',
-    headers: { Accept: 'application/json' },
-  })
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/jobs`, {
+      method: 'POST',
+      headers: { Accept: 'application/json' },
+    })
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => null)
-    throw new ApiError(errorData?.detail || `Failed to create job (${response.status})`, response.status)
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      throw new ApiError(errorData?.detail || `Failed to create job (${response.status})`, response.status)
+    }
+
+    return response.json()
+  } catch (err: unknown) {
+    if (err instanceof ApiError) {
+      throw err
+    }
+    const message = err instanceof Error ? err.message : String(err)
+    if (message.includes('Load failed') || message.includes('Failed to fetch') || message.includes('NetworkError')) {
+      throw new ApiError('Cannot connect to the local backend service. Please check that the server is running.', 0)
+    }
+    throw new ApiError(`Failed to create job: ${message}`, 0)
   }
-
-  return response.json()
 }
 
 export async function getJob(jobId: string): Promise<JobResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}`, {
-    headers: { Accept: 'application/json' },
-  })
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}`, {
+      headers: { Accept: 'application/json' },
+    })
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => null)
-    throw new ApiError(errorData?.detail || `Failed to fetch job (${response.status})`, response.status)
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      throw new ApiError(errorData?.detail || `Failed to fetch job (${response.status})`, response.status)
+    }
+
+    return response.json()
+  } catch (err: unknown) {
+    if (err instanceof ApiError) {
+      throw err
+    }
+    const message = err instanceof Error ? err.message : String(err)
+    if (message.includes('Load failed') || message.includes('Failed to fetch') || message.includes('NetworkError')) {
+      throw new ApiError('Cannot connect to the local backend service. Please check that the server is running.', 0)
+    }
+    throw new ApiError(`Failed to fetch job: ${message}`, 0)
   }
-
-  return response.json()
 }
 
 export async function uploadTemplate(jobId: string, file: File): Promise<JobResponse> {
@@ -489,9 +511,13 @@ export function getRenderedPreviewUrl(
   return url.toString()
 }
 
-export function getTemplatePreviewUrl(relativeUrl: string): string {
-  if (relativeUrl.startsWith('http')) return relativeUrl
-  return `${API_BASE_URL}${relativeUrl}`
+export function getTemplatePreviewUrl(relativeUrl: string, version?: number | string): string {
+  const base = relativeUrl.startsWith('http') ? relativeUrl : `${API_BASE_URL}${relativeUrl}`
+  if (version !== undefined) {
+    const delimiter = base.includes('?') ? '&' : '?'
+    return `${base}${delimiter}v=${version}`
+  }
+  return base
 }
 
 export async function validateExport(jobId: string): Promise<BatchValidationReport> {
@@ -544,9 +570,13 @@ export function getExportDownloadUrl(jobId: string, exportId: string): string {
   return `${API_BASE_URL}/api/jobs/${jobId}/exports/${exportId}/download`
 }
 
-export function getPresetThumbnailUrl(relativeUrl: string): string {
-  if (relativeUrl.startsWith('http')) return relativeUrl
-  return `${API_BASE_URL}${relativeUrl}`
+export function getPresetThumbnailUrl(relativeUrl: string, version?: number | string): string {
+  const base = relativeUrl.startsWith('http') ? relativeUrl : `${API_BASE_URL}${relativeUrl}`
+  if (version !== undefined) {
+    const delimiter = base.includes('?') ? '&' : '?'
+    return `${base}${delimiter}v=${version}`
+  }
+  return base
 }
 
 export async function fetchPresets(): Promise<PresetMetadata[]> {

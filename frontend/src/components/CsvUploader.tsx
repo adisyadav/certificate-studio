@@ -99,56 +99,51 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({
   }
 
   return (
-    <div className="rounded-xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs flex flex-col justify-between">
+    <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-xs flex flex-col justify-between">
       <div>
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-700">
-              <FileSpreadsheet className="h-4 w-4" />
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="h-7 w-7 rounded-md bg-slate-100 flex items-center justify-center text-slate-700">
+              <FileSpreadsheet className="h-3.5 w-3.5" />
             </div>
-            <div>
-              <h3 className="text-sm font-semibold text-slate-900 leading-tight">
-                Participant List
-              </h3>
-              <p className="text-xs text-slate-500">
-                CSV with participant names
-              </p>
-            </div>
+            <h3 className="text-xs font-semibold text-slate-900 leading-tight">
+              Participant List
+            </h3>
           </div>
 
           {csvSummary && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700">
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700">
+              <CheckCircle2 className="h-3 w-3 text-emerald-600" />
               <span>{csvSummary.valid_count} names</span>
             </span>
           )}
         </div>
 
         {error && (
-          <div className="mb-4 p-3 rounded-lg bg-rose-50 border border-rose-200/80 text-rose-700 text-xs flex items-start gap-2">
-            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-rose-600" />
+          <div className="mb-3 p-2.5 rounded-lg bg-rose-50 border border-rose-200/80 text-rose-700 text-xs flex items-start gap-2">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-rose-600" />
             <div className="leading-relaxed">{error}</div>
           </div>
         )}
 
         {csvSummary ? (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {/* Participant Statistics */}
             <div className="grid grid-cols-3 gap-2 text-xs">
-              <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100">
-                <span className="text-[11px] text-slate-500 block">Total Rows</span>
+              <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
+                <span className="text-[10px] text-slate-400 block">Total Rows</span>
                 <span className="font-semibold text-slate-800 font-mono">
                   {csvSummary.total_rows}
                 </span>
               </div>
-              <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100">
-                <span className="text-[11px] text-slate-500 block">Valid Names</span>
+              <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
+                <span className="text-[10px] text-slate-400 block">Valid Names</span>
                 <span className="font-semibold text-slate-800 font-mono">
                   {csvSummary.valid_count}
                 </span>
               </div>
-              <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100">
-                <span className="text-[11px] text-slate-500 block">Duplicates</span>
+              <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
+                <span className="text-[10px] text-slate-400 block">Duplicates</span>
                 <span className="font-semibold text-slate-800 font-mono">
                   {csvSummary.duplicate_count}
                 </span>
@@ -156,7 +151,7 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({
             </div>
 
             {/* Name Column Selection Dropdown */}
-            <div className="p-3 rounded-lg bg-slate-50 border border-slate-200/60">
+            <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/60">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <label
@@ -165,7 +160,7 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({
                   >
                     Name Column
                   </label>
-                  <span className="text-[11px] text-slate-500 block">
+                  <span className="text-[10px] text-slate-400 block">
                     Field printed on certificates
                   </span>
                 </div>

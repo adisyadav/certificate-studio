@@ -164,6 +164,21 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
   const [presetSuccessMessage, setPresetSuccessMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
+  // Auto-dismiss transient feedback banners after 4 seconds
+  useEffect(() => {
+    if (perfectFitSummary) {
+      const timer = setTimeout(() => setPerfectFitSummary(null), 4000)
+      return () => clearTimeout(timer)
+    }
+  }, [perfectFitSummary])
+
+  useEffect(() => {
+    if (presetSuccessMessage) {
+      const timer = setTimeout(() => setPresetSuccessMessage(null), 4000)
+      return () => clearTimeout(timer)
+    }
+  }, [presetSuccessMessage])
+
   // 12. Preview mode toggle (temporarily hides bounding rectangle and handles)
   const [isPreviewMode, setIsPreviewMode] = useState<boolean>(false)
 

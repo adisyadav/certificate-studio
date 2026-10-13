@@ -21,6 +21,47 @@ interface SavedTemplatesProps {
   disabled?: boolean
 }
 
+const PresetThumbnail: React.FC<{ url: string; alt: string; format: string }> = ({
+  url,
+  alt,
+  format,
+}) => {
+  const [loaded, setLoaded] = useState(false)
+  const [error, setError] = useState(false)
+
+  return (
+    <>
+      {!loaded && !error && (
+        <div className="absolute inset-0 flex items-center justify-center bg-slate-50 text-slate-300">
+          <LayoutTemplate className="h-5 w-5" />
+        </div>
+      )}
+      {error ? (
+        <div className="flex flex-col items-center justify-center text-slate-400 gap-1 text-[10px]">
+          <LayoutTemplate className="h-5 w-5 text-slate-300" />
+          <span>No preview</span>
+        </div>
+      ) : (
+        <img
+          src={url}
+          alt={alt}
+          onLoad={() => setLoaded(true)}
+          onError={() => setError(true)}
+          className={`w-full h-full object-contain transition-opacity duration-150 ${
+            loaded ? 'opacity-100' : 'opacity-0'
+          }`}
+          loading="lazy"
+        />
+      )}
+      <div className="absolute top-1.5 right-1.5">
+        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-slate-900/75 text-white">
+          {format}
+        </span>
+      </div>
+    </>
+  )
+}
+
 export const SavedTemplates: React.FC<SavedTemplatesProps> = ({
   onSelectPreset,
   disabled = false,
@@ -147,17 +188,11 @@ export const SavedTemplates: React.FC<SavedTemplatesProps> = ({
               <div className="space-y-2.5">
                 {/* Thumbnail Preview */}
                 <div className="h-28 rounded-md bg-white overflow-hidden relative border border-slate-200/70 flex items-center justify-center">
-                  <img
-                    src={getPresetThumbnailUrl(preset.thumbnail_url)}
+                  <PresetThumbnail
+                    url={getPresetThumbnailUrl(preset.thumbnail_url)}
                     alt={preset.name}
-                    className="w-full h-full object-contain"
-                    loading="lazy"
+                    format={preset.template_meta.format}
                   />
-                  <div className="absolute top-1.5 right-1.5">
-                    <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-slate-900/75 text-white">
-                      {preset.template_meta.format}
-                    </span>
-                  </div>
                 </div>
 
                 {/* Preset Metadata */}

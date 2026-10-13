@@ -432,12 +432,19 @@ export const App: React.FC = () => {
         <div>
           {/* Global Error Banner */}
           {globalError && (
-            <div className="mb-6 p-3.5 rounded-lg bg-rose-50 border border-rose-200/80 text-rose-800 text-xs flex items-start gap-2.5">
-              <AlertTriangle className="h-4 w-4 shrink-0 text-rose-600 mt-0.5" />
-              <div>
-                <p className="font-semibold">Notice</p>
-                <p className="mt-0.5">{globalError}</p>
+            <div className="mb-6 p-3 rounded-lg bg-rose-50 border border-rose-200/80 text-rose-800 text-xs flex items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-rose-600" />
+                <span>{globalError}</span>
               </div>
+              <button
+                type="button"
+                onClick={() => setGlobalError(null)}
+                className="text-rose-500 hover:text-rose-800 font-medium text-xs px-1.5 py-0.5 rounded transition-colors"
+                title="Dismiss"
+              >
+                ✕
+              </button>
             </div>
           )}
 
