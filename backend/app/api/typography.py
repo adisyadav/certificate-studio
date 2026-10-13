@@ -6,6 +6,7 @@ from app.schemas.typography import (
     TypographyConfig,
     BatchTypographyReport,
 )
+from app.schemas.cleanup import CleanupConfig, SaveCleanupRequest
 from app.schemas.job import JobResponse
 from app.services.font_service import FontService, FontNotFoundError
 from app.services.job_service import JobService, JobNotFoundError
@@ -21,6 +22,21 @@ async def list_fonts() -> List[FontInfo]:
     return FontService.list_fonts()
 
 
+@router.post("/jobs/{job_id}/cleanup", response_model=JobResponse)
+async def save_cleanup(
+    job_id: str,
+    cleanup: CleanupConfig,
+) -> JobResponse:
+    """Save placeholder cleanup configuration (mode, region, solid color)."""
+    try:
+        return JobService.save_cleanup_config(job_id, cleanup)
+    except JobNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job '{job_id}' not found.",
+        )
+
+
 @router.post("/jobs/{job_id}/typography", response_model=JobResponse)
 async def save_typography(
     job_id: str,
@@ -28,7 +44,6 @@ async def save_typography(
 ) -> JobResponse:
     """Save typography preferences (font, sizes, color, alignment) for a job."""
     try:
-        # Validate font exists
         FontService.get_font_path(config.font_id)
         return JobService.save_typography_config(job_id, config)
     except FontNotFoundError:
@@ -43,6 +58,40 @@ async def save_typography(
         )
 
 
+@router.get("/jobs/{job_id}/preview/cleaned")
+async def get_cleaned_preview(job_id: str):
+    """Retrieve PNG preview of the template with original placeholder removed."""
+    try:
+        job = JobService.get_job(job_id)
+    except JobNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job '{job_id}' not found.",
+        )
+
+    if not job.template:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot render cleaned preview: No template uploaded.",
+        )
+
+    template_path = JobService.get_original_template_path(job_id)
+    cleanup_config = job.cleanup or CleanupConfig()
+
+    try:
+        cleaned_bytes = RenderingService.render_cleaned_preview(
+            original_template_path=template_path,
+            template_meta=job.template,
+            cleanup_config=cleanup_config,
+        )
+        return Response(content=cleaned_bytes, media_type="image/png")
+    except RenderingError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+
 @router.get("/jobs/{job_id}/preview")
 async def get_rendered_preview(
     job_id: str,
@@ -50,7 +99,8 @@ async def get_rendered_preview(
     sample_text: Optional[str] = Query(None, description="Optional custom preview text"),
 ):
     """
-    Render a personalized certificate preview PNG using authoritative backend typography and layout.
+    Render personalized certificate preview PNG using unified pipeline:
+    Original -> Cleanup -> Typography -> Replacement Text.
     """
     try:
         job = JobService.get_job(job_id)
@@ -81,12 +131,12 @@ async def get_rendered_preview(
             text_to_render = match.name
 
     if not text_to_render:
-        # Fallback to first valid participant or default sample
         all_participants = JobService.get_all_participants(job_id)
         first_valid = next((p for p in all_participants if p.is_valid and p.name), None)
         text_to_render = first_valid.name if first_valid else "Jane Doe"
 
     template_path = JobService.get_original_template_path(job_id)
+    cleanup_config = job.cleanup or CleanupConfig()
     typography_config = job.typography or TypographyConfig()
 
     try:
@@ -94,6 +144,7 @@ async def get_rendered_preview(
             original_template_path=template_path,
             template_meta=job.template,
             placement=job.placement,
+            cleanup_config=cleanup_config,
             typography_config=typography_config,
             participant_name=text_to_render,
         )
@@ -115,7 +166,7 @@ async def get_rendered_preview(
 
 @router.post("/jobs/{job_id}/analyze-typography", response_model=BatchTypographyReport)
 async def analyze_typography(job_id: str) -> BatchTypographyReport:
-    """Analyze all valid participant names against the current placement and typography settings."""
+    """Analyze all valid participant names against current placement and typography settings."""
     try:
         job = JobService.get_job(job_id)
     except JobNotFoundError:
@@ -140,6 +191,5 @@ async def analyze_typography(job_id: str) -> BatchTypographyReport:
         config=config,
     )
 
-    # Persist report with job
     JobService.save_batch_analysis(job_id, report)
     return report

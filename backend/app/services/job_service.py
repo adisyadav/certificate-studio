@@ -15,6 +15,7 @@ from app.schemas.job import (
 )
 from app.schemas.placement import PlacementRegion
 from app.schemas.typography import TypographyConfig, BatchTypographyReport
+from app.schemas.cleanup import CleanupConfig
 
 
 class JobNotFoundError(Exception):
@@ -52,6 +53,7 @@ class JobService:
             "template": None,
             "csv_summary": None,
             "placement": None,
+            "cleanup": CleanupConfig().model_dump(),
             "typography": TypographyConfig().model_dump(),
             "batch_analysis": None,
             "participants": [],
@@ -94,9 +96,15 @@ class JobService:
         data = json.loads(meta_file.read_text(encoding="utf-8"))
         data["template"] = template.model_dump()
 
-        # Invalidate previous placement and batch analysis when template changes
+        # Invalidate previous placement, cleanup, and batch analysis when template changes
         data["placement"] = None
+        data["cleanup"] = None
         data["batch_analysis"] = None
+
+        # Remove cached cleaned preview if present
+        cleaned_cache = job_dir / "cleaned_template.png"
+        if cleaned_cache.exists():
+            cleaned_cache.unlink()
 
         if data.get("csv_summary"):
             data["status"] = JobStatus.READY.value
@@ -124,7 +132,6 @@ class JobService:
         data = json.loads(meta_file.read_text(encoding="utf-8"))
         data["csv_summary"] = summary.model_dump()
         data["participants"] = [p.model_dump() for p in participants]
-        # Invalidate batch analysis when CSV changes
         data["batch_analysis"] = None
 
         if data.get("template"):
@@ -146,8 +153,28 @@ class JobService:
 
         data = json.loads(meta_file.read_text(encoding="utf-8"))
         data["placement"] = placement.model_dump()
-        # Invalidate previous batch analysis when placement region changes
         data["batch_analysis"] = None
+
+        cls._save_atomic(job_dir, data)
+        return cls._to_response(data)
+
+    @classmethod
+    def save_cleanup_config(
+        cls, job_id: str, cleanup: CleanupConfig
+    ) -> JobResponse:
+        job_dir = cls.get_job_dir(job_id)
+        meta_file = job_dir / "job.json"
+        if not meta_file.exists():
+            raise JobNotFoundError(f"Job {job_id} not found.")
+
+        data = json.loads(meta_file.read_text(encoding="utf-8"))
+        data["cleanup"] = cleanup.model_dump()
+        data["batch_analysis"] = None
+
+        # Invalidate cleaned template cache
+        cleaned_cache = job_dir / "cleaned_template.png"
+        if cleaned_cache.exists():
+            cleaned_cache.unlink()
 
         cls._save_atomic(job_dir, data)
         return cls._to_response(data)
@@ -163,7 +190,6 @@ class JobService:
 
         data = json.loads(meta_file.read_text(encoding="utf-8"))
         data["typography"] = config.model_dump()
-        # Invalidate previous batch analysis when typography settings change
         data["batch_analysis"] = None
 
         cls._save_atomic(job_dir, data)
@@ -190,9 +216,13 @@ class JobService:
         return job.placement
 
     @classmethod
+    def get_cleanup(cls, job_id: str) -> Optional[CleanupConfig]:
+        job = cls.get_job(job_id)
+        return job.cleanup
+
+    @classmethod
     def get_original_template_path(cls, job_id: str) -> Path:
         job_dir = cls.get_job_dir(job_id)
-        # Search for saved original template file
         for ext in [".png", ".jpg", ".jpeg", ".pdf"]:
             candidate = job_dir / f"template_original{ext}"
             if candidate.exists():
@@ -244,6 +274,9 @@ class JobService:
         placement_data = (
             PlacementRegion(**data["placement"]) if data.get("placement") else None
         )
+        cleanup_data = (
+            CleanupConfig(**data["cleanup"]) if data.get("cleanup") else None
+        )
         typography_data = (
             TypographyConfig(**data["typography"]) if data.get("typography") else TypographyConfig()
         )
@@ -260,6 +293,7 @@ class JobService:
             template=template_meta,
             csv_summary=csv_meta,
             placement=placement_data,
+            cleanup=cleanup_data,
             typography=typography_data,
             batch_analysis=batch_report,
             participants_preview=participants_preview,

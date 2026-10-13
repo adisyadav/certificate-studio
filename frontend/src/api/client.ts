@@ -89,6 +89,16 @@ export interface PlacementRegion {
   height: number
 }
 
+export type CleanupMode = 'none' | 'solid' | 'inpaint' | 'pdf_redact'
+
+export interface CleanupConfig {
+  mode: CleanupMode
+  region: PlacementRegion | null
+  sample_border_color: boolean
+  custom_color: string | null
+  inpaint_radius: number
+}
+
 export interface JobResponse {
   job_id: string
   created_at: string
@@ -96,6 +106,7 @@ export interface JobResponse {
   template: TemplateMetadata | null
   csv_summary: CsvSummary | null
   placement: PlacementRegion | null
+  cleanup: CleanupConfig | null
   typography: TypographyConfig | null
   batch_analysis: BatchTypographyReport | null
   participants_preview: ParticipantRecord[]
@@ -273,6 +284,35 @@ export async function analyzeTypography(jobId: string): Promise<BatchTypographyR
   return response.json()
 }
 
+export async function saveCleanup(
+  jobId: string,
+  cleanup: CleanupConfig
+): Promise<JobResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/cleanup`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(cleanup),
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null)
+    throw new ApiError(errorData?.detail || `Failed to save cleanup (${response.status})`, response.status)
+  }
+
+  return response.json()
+}
+
+export function getCleanedPreviewUrl(jobId: string, v?: number): string {
+  const url = new URL(`${API_BASE_URL}/api/jobs/${jobId}/preview/cleaned`)
+  if (v) {
+    url.searchParams.set('v', String(v))
+  }
+  return url.toString()
+}
+
 export function getRenderedPreviewUrl(
   jobId: string,
   params?: { participantRow?: number; sampleText?: string; v?: number }
@@ -294,3 +334,4 @@ export function getTemplatePreviewUrl(relativeUrl: string): string {
   if (relativeUrl.startsWith('http')) return relativeUrl
   return `${API_BASE_URL}${relativeUrl}`
 }
+

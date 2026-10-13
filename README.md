@@ -13,42 +13,27 @@ Certificate Studio is organized as a clean, decoupled monorepo:
 
 ---
 
-## Current Status: Milestone 4 (Typography and Rendering Engine)
+## Current Status: Milestone 4.1 (Live WYSIWYG Editor and Placeholder Removal)
 
 ### Features Implemented
-1. **Font System with Bundled OFL Fonts**:
-   - Bundles 5 legally redistributable, open-source fonts with their respective `OFL.txt` licenses:
-     - `great_vibes`: Great Vibes (flowing calligraphy)
-     - `allura`: Allura (formal script)
-     - `alex_brush`: Alex Brush (classic quick script)
-     - `cinzel`: Cinzel (classical regal serif)
-     - `eb_garamond`: EB Garamond (readable traditional serif)
-   - Font glyph coverage validation using `fontTools.ttLib.TTFont` `cmap` inspection.
-   - Proactively reports unsupported characters rather than rendering missing-glyph boxes.
-2. **Authoritative Typography Engine (`typography_service.py`)**:
-   - Precise visual ink bounding box calculation (`draw.textbbox`) accounting for ascenders, descenders, and decorative calligraphic flourishes.
-   - Deterministic binary search font fitting between configured `preferred_font_size` and `min_font_size`.
-   - Never silently shrinks text below the minimum readable size threshold (`min_font_size`).
-   - Centers text horizontally and vertically with safe padding constraints.
-   - Distinct coordinate systems: pixels (`px`) for raster templates, standard PDF points (`pt`, 1/72 inch) for vector documents.
-3. **Lossless Rendering Engine (`rendering_service.py`)**:
-   - Renders participant names onto copies of the original template without modifying stored files.
-   - Antialiased high-resolution preview generation for PNG, JPG, and single-page PDF templates.
-   - Configurable text color (HEX) and horizontal text alignment (center, left, right).
-4. **Batch Typography Analysis (`batch_analysis_service.py`)**:
-   - Analyzes all participant records in the CSV:
-     - Identifies shortest name, longest name by characters, and widest name by visual rendered width.
-     - Detects names requiring automatic font-size reduction.
-     - Flags overflowing names that exceed bounds at the minimum font size.
-     - Flags names with unsupported glyphs.
-   - Invalidation: Modifying placement, template, or typography automatically invalidates previous analysis.
-5. **Interactive Dual-Mode Frontend Editor**:
-   - Mode 1: Interactive Placement Canvas (React Konva) for dragging and resizing the bounding box.
-   - Mode 2: Authoritative Backend Preview displaying the exact font rasterization.
-   - Font family dropdown, color picker, preferred and minimum font size sliders, and sample participant selectors.
-   - Real-time batch analysis report with one-click preview of the widest participant name.
-6. **Session Persistence**:
-   - Full recovery of job session, uploaded assets, selected column, placement, and typography across page reloads.
+1. **Live WYSIWYG Single-Canvas Experience**:
+   - Eliminated the split between "placement canvas" and "authoritative preview".
+   - Immediate frontend typography visualization using bundled TrueType font files loaded via `@font-face` directly inside React Konva.
+   - Real-time instant updates on the main certificate canvas when font, size, color, alignment, or participant changes.
+   - 250ms debounced background synchronization with the authoritative backend rendering pipeline.
+2. **Dual-Region Independent Architecture**:
+   - **Name Placement Region**: Bounded box (indigo outline) determining where the new recipient name is rendered and fitted.
+   - **Cleanup Region**: Dedicated bounded box (red/dashed outline) marking the placeholder text to be erased on the template.
+   - Either region can be toggled as active and adjusted via mouse drag, resize handles, or arrow keys.
+3. **Non-Destructive Placeholder Removal Engine (`placeholder_removal_service.py`)**:
+   - **Solid Background Fill**: Replaces old text with a uniform background; supports auto-border color sampling or custom HEX color.
+   - **OpenCV Telea Inpainting**: Reconstructs parchment and textured backgrounds seamlessly without blur or discoloration (`cv2.INPAINT_TELEA`).
+   - **PyMuPDF Vector Text Redaction**: Removes underlying vector text streams cleanly from PDF templates (`page.add_redact_annot`).
+   - **Original Preservation**: Original template files are never modified; cleanings are performed non-destructively in-memory and cached per version.
+4. **Canvas View Switching**:
+   - In-canvas view toggle: `Personalized` (default view with cleaned background + live recipient typography), `Cleaned` (template with erased placeholder), and `Original` (untouched uploaded template).
+5. **Session Persistence**:
+   - Full recovery of job session, uploaded assets, selected column, placement, cleanup configuration, and typography across page reloads.
 
 ---
 

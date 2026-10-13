@@ -21,11 +21,13 @@ import {
   uploadCsv,
   selectNameColumn,
   savePlacement,
+  saveCleanup,
   saveTypography,
   ApiError,
   type HealthStatus,
   type JobResponse,
   type PlacementRegion,
+  type CleanupConfig,
   type TypographyConfig,
 } from './api/client'
 import { TemplateUploader } from './components/TemplateUploader'
@@ -201,6 +203,21 @@ export const App: React.FC = () => {
     setGlobalError(null)
     try {
       const updatedJob = await savePlacement(currentJob.job_id, placement)
+      setCurrentJob(updatedJob)
+      setStoredJobId(updatedJob.job_id)
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setGlobalError(err.message)
+      }
+      throw err
+    }
+  }
+
+  const handleSaveCleanup = async (cleanup: CleanupConfig) => {
+    if (!currentJob) return
+    setGlobalError(null)
+    try {
+      const updatedJob = await saveCleanup(currentJob.job_id, cleanup)
       setCurrentJob(updatedJob)
       setStoredJobId(updatedJob.job_id)
     } catch (err: unknown) {
@@ -547,15 +564,17 @@ export const App: React.FC = () => {
                 jobId={currentJob.job_id}
                 template={currentJob.template}
                 savedPlacement={currentJob.placement}
+                savedCleanup={currentJob.cleanup}
                 savedTypography={currentJob.typography}
                 savedBatchAnalysis={currentJob.batch_analysis}
                 participants={currentJob.participants_preview}
                 onSavePlacement={handleSavePlacement}
+                onSaveCleanup={handleSaveCleanup}
                 onSaveTypography={handleSaveTypography}
                 onBackToUpload={() => handleTabChange('upload')}
                 onContinue={() => {
                   alert(
-                    'Milestone 4 complete! Placement and typography configuration are validated. Batch PDF export and ZIP generation will be performed in Milestone 5.'
+                    'Milestone 4.1 complete! Unified WYSIWYG editor and placeholder removal are validated. Batch PDF export and ZIP generation will be performed in Milestone 5.'
                   )
                 }}
                 canContinue={canContinueToGeneration}

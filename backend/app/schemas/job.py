@@ -5,6 +5,7 @@ from datetime import datetime
 
 from app.schemas.placement import PlacementRegion
 from app.schemas.typography import TypographyConfig, BatchTypographyReport
+from app.schemas.cleanup import CleanupConfig
 
 
 class JobStatus(str, Enum):
@@ -60,6 +61,7 @@ class JobResponse(BaseModel):
     template: Optional[TemplateMetadata] = None
     csv_summary: Optional[CsvSummary] = None
     placement: Optional[PlacementRegion] = None
+    cleanup: Optional[CleanupConfig] = None
     typography: Optional[TypographyConfig] = None
     batch_analysis: Optional[BatchTypographyReport] = None
     participants_preview: List[ParticipantRecord] = Field(default_factory=list)

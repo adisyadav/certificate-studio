@@ -6,12 +6,14 @@ import fitz  # PyMuPDF
 
 from app.schemas.job import TemplateMetadata
 from app.schemas.placement import PlacementRegion
+from app.schemas.cleanup import CleanupConfig, CleanupMode
 from app.schemas.typography import (
     TypographyConfig,
     TypographyLayoutResult,
 )
 from app.services.font_service import FontService
 from app.services.typography_service import TypographyService
+from app.services.placeholder_removal_service import PlaceholderRemovalService
 
 
 class RenderingError(Exception):
@@ -20,129 +22,91 @@ class RenderingError(Exception):
 
 class RenderingService:
     @classmethod
+    def get_cleaned_template_image(
+        cls,
+        original_template_path: Path,
+        cleanup_config: CleanupConfig,
+        is_pdf: bool = False,
+    ) -> Image.Image:
+        """
+        Produces a cleaned PIL Image copy based on cleanup_config.
+        Never modifies the original on disk.
+        """
+        img, _ = PlaceholderRemovalService.clean_template(
+            original_template_path=original_template_path,
+            config=cleanup_config,
+            is_pdf=is_pdf,
+        )
+        return img
+
+    @classmethod
+    def render_cleaned_preview(
+        cls,
+        original_template_path: Path,
+        template_meta: TemplateMetadata,
+        cleanup_config: CleanupConfig,
+    ) -> bytes:
+        """
+        Generates and returns PNG bytes of the cleaned certificate background.
+        """
+        is_pdf = template_meta.format.upper() == "PDF"
+        cleaned_img = cls.get_cleaned_template_image(
+            original_template_path=original_template_path,
+            cleanup_config=cleanup_config,
+            is_pdf=is_pdf,
+        )
+        output_stream = io.BytesIO()
+        cleaned_img.convert("RGB").save(output_stream, format="PNG", optimize=True)
+        return output_stream.getvalue()
+
+    @classmethod
     def render_certificate_preview(
         cls,
         original_template_path: Path,
         template_meta: TemplateMetadata,
         placement: PlacementRegion,
+        cleanup_config: CleanupConfig,
         typography_config: TypographyConfig,
         participant_name: str,
     ) -> Tuple[bytes, TypographyLayoutResult]:
         """
-        Renders the participant's name onto a copy of the template.
-        Never modifies the stored original.
-        Returns (PNG bytes of rendered preview, TypographyLayoutResult).
+        Unified Rendering Pipeline:
+        Original Template -> Cleanup -> Text Layout -> Personalized Rendering
+        Returns (PNG bytes of personalized certificate, TypographyLayoutResult).
         """
         if not original_template_path.exists():
             raise RenderingError("Original certificate template file not found.")
 
         is_pdf = template_meta.format.upper() == "PDF"
 
-        if is_pdf:
-            return cls._render_pdf_preview(
-                original_template_path=original_template_path,
-                placement=placement,
-                config=typography_config,
-                text=participant_name,
-            )
-        else:
-            return cls._render_raster_preview(
-                original_template_path=original_template_path,
-                placement=placement,
-                config=typography_config,
-                text=participant_name,
-            )
+        # 1. Produce cleaned template image copy
+        base_img = cls.get_cleaned_template_image(
+            original_template_path=original_template_path,
+            cleanup_config=cleanup_config,
+            is_pdf=is_pdf,
+        )
 
-    @classmethod
-    def _render_raster_preview(
-        cls,
-        original_template_path: Path,
-        placement: PlacementRegion,
-        config: TypographyConfig,
-        text: str,
-    ) -> Tuple[bytes, TypographyLayoutResult]:
-        try:
-            # Open template image copy
-            with Image.open(original_template_path) as orig_img:
-                img = orig_img.convert("RGBA")
-        except Exception as e:
-            raise RenderingError(f"Failed to open raster template: {str(e)}")
+        width, height = base_img.size
 
-        width, height = img.size
-
-        # Authoritative layout in template pixel coordinates
+        # 2. Authoritative layout in template coordinate space
         layout = TypographyService.calculate_layout(
-            text=text,
-            config=config,
+            text=participant_name,
+            config=typography_config,
             placement=placement,
             target_width=width,
             target_height=height,
         )
 
-        font = FontService.load_pillow_font(config.font_id, layout.font_size)
-
-        # Draw text onto RGBA overlay for crisp antialiasing
-        draw = ImageDraw.Draw(img)
+        # 3. Personalized Replacement Text Rendering
+        font = FontService.load_pillow_font(typography_config.font_id, layout.font_size)
+        draw = ImageDraw.Draw(base_img)
         draw.text(
             (layout.draw_position["x"], layout.draw_position["y"]),
-            text,
+            participant_name,
             font=font,
-            fill=config.text_color,
+            fill=typography_config.text_color,
         )
 
-        # Output browser PNG
         output_stream = io.BytesIO()
-        rgb_img = img.convert("RGB")
-        rgb_img.save(output_stream, format="PNG", optimize=True)
+        base_img.convert("RGB").save(output_stream, format="PNG", optimize=True)
         return output_stream.getvalue(), layout
-
-    @classmethod
-    def _render_pdf_preview(
-        cls,
-        original_template_path: Path,
-        placement: PlacementRegion,
-        config: TypographyConfig,
-        text: str,
-    ) -> Tuple[bytes, TypographyLayoutResult]:
-        try:
-            doc = fitz.open(str(original_template_path))
-        except Exception as e:
-            raise RenderingError(f"Failed to open PDF template: {str(e)}")
-
-        try:
-            page = doc.load_page(0)
-            rect = page.rect
-            pdf_w = rect.width
-            pdf_h = rect.height
-
-            # Preview rendering DPI: 150 DPI gives zoom 150/72 ≈ 2.0833
-            zoom_factor = 150.0 / 72.0
-            matrix = fitz.Matrix(zoom_factor, zoom_factor)
-            pix = page.get_pixmap(matrix=matrix, alpha=False)
-
-            # Render onto high-res raster preview of PDF
-            img = Image.open(io.BytesIO(pix.tobytes(output="png"))).convert("RGBA")
-            preview_w, preview_h = img.size
-
-            layout = TypographyService.calculate_layout(
-                text=text,
-                config=config,
-                placement=placement,
-                target_width=preview_w,
-                target_height=preview_h,
-            )
-
-            font = FontService.load_pillow_font(config.font_id, layout.font_size)
-            draw = ImageDraw.Draw(img)
-            draw.text(
-                (layout.draw_position["x"], layout.draw_position["y"]),
-                text,
-                font=font,
-                fill=config.text_color,
-            )
-
-            output_stream = io.BytesIO()
-            img.convert("RGB").save(output_stream, format="PNG", optimize=True)
-            return output_stream.getvalue(), layout
-        finally:
-            doc.close()
