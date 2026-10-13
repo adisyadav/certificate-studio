@@ -4,7 +4,6 @@ import {
   getJob,
   getTemplatePreviewUrl,
   getPresetThumbnailUrl,
-  ApiError,
 } from './client'
 
 describe('Client Reliability & Error Handling Regression Tests', () => {

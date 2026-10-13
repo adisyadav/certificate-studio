@@ -37,6 +37,12 @@ yarn-error.log*
 frontend/.env
 !frontend/.env.example
 
+# Test Artifacts & Verification Output
+test-artifacts/
+screenshots/
+playwright-report/
+test-results/
+
 # Local storage and Job Data (AGENTS.md compliance: keep local data safe and untracked)
 storage/
 temp/

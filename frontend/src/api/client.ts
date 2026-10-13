@@ -613,7 +613,7 @@ export async function savePresetFromJob(jobId: string, name: string): Promise<Pr
   return response.json()
 }
 
-export async function usePreset(presetId: string): Promise<JobResponse> {
+export async function applyPreset(presetId: string): Promise<JobResponse> {
   const response = await fetch(`${API_BASE_URL}/api/presets/${presetId}/use`, {
     method: 'POST',
     headers: {
@@ -628,6 +628,8 @@ export async function usePreset(presetId: string): Promise<JobResponse> {
 
   return response.json()
 }
+
+export const usePreset = applyPreset
 
 export async function deletePreset(presetId: string): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/api/presets/${presetId}`, {

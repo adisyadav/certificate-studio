@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import {
   fetchPresets,
-  usePreset,
+  applyPreset,
   deletePreset,
   getPresetThumbnailUrl,
   type PresetMetadata,
@@ -97,7 +97,7 @@ export const SavedTemplates: React.FC<SavedTemplatesProps> = ({
     setUsingPresetId(presetId)
     setErrorMessage(null)
     try {
-      const newJob = await usePreset(presetId)
+      const newJob = await applyPreset(presetId)
       onSelectPreset(newJob)
     } catch (err: unknown) {
       if (err instanceof ApiError) {
