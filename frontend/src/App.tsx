@@ -34,6 +34,7 @@ import { TemplateUploader } from './components/TemplateUploader'
 import { CsvUploader } from './components/CsvUploader'
 import { CertificateEditor } from './components/CertificateEditor'
 import { ExportWorkspace } from './components/ExportWorkspace'
+import { SavedTemplates } from './components/SavedTemplates'
 
 import {
   getStoredJobId,
@@ -532,6 +533,17 @@ export const App: React.FC = () => {
                   )}
                 </div>
               </section>
+
+              {/* Reusable Saved Templates Gallery */}
+              <SavedTemplates
+                onSelectPreset={(newJob) => {
+                  setCurrentJob(newJob)
+                  setStoredJobId(newJob.job_id)
+                  // Prompt user to upload new CSV or open editor
+                  setGlobalError(null)
+                }}
+                disabled={isCreatingNewProject || backendOffline}
+              />
 
               {/* Upload Grid */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">

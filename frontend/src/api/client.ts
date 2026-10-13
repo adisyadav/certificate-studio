@@ -162,6 +162,21 @@ export interface ExportJobResponse {
   zip_size_bytes?: number | null
 }
 
+export interface PresetMetadata {
+  preset_id: string
+  name: string
+  template_meta: TemplateMetadata
+  placement: PlacementRegion
+  typography: TypographyConfig
+  created_at: string
+  updated_at: string
+  thumbnail_url: string
+}
+
+export interface PresetListResponse {
+  presets: PresetMetadata[]
+}
+
 export interface TemplateMetadata {
   filename: string
   format: string
@@ -528,4 +543,71 @@ export async function getExportStatus(jobId: string, exportId: string): Promise<
 export function getExportDownloadUrl(jobId: string, exportId: string): string {
   return `${API_BASE_URL}/api/jobs/${jobId}/exports/${exportId}/download`
 }
+
+export function getPresetThumbnailUrl(relativeUrl: string): string {
+  if (relativeUrl.startsWith('http')) return relativeUrl
+  return `${API_BASE_URL}${relativeUrl}`
+}
+
+export async function fetchPresets(): Promise<PresetMetadata[]> {
+  const response = await fetch(`${API_BASE_URL}/api/presets`, {
+    headers: {
+      Accept: 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null)
+    throw new ApiError(errorData?.detail || `Failed to fetch presets (${response.status})`, response.status)
+  }
+
+  const data: PresetListResponse = await response.json()
+  return data.presets
+}
+
+export async function savePresetFromJob(jobId: string, name: string): Promise<PresetMetadata> {
+  const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/save-preset`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({ name }),
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null)
+    throw new ApiError(errorData?.detail || `Failed to save preset (${response.status})`, response.status)
+  }
+
+  return response.json()
+}
+
+export async function usePreset(presetId: string): Promise<JobResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/presets/${presetId}/use`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null)
+    throw new ApiError(errorData?.detail || `Failed to use preset (${response.status})`, response.status)
+  }
+
+  return response.json()
+}
+
+export async function deletePreset(presetId: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/presets/${presetId}`, {
+    method: 'DELETE',
+  })
+
+  if (!response.ok && response.status !== 204) {
+    const errorData = await response.json().catch(() => null)
+    throw new ApiError(errorData?.detail || `Failed to delete preset (${response.status})`, response.status)
+  }
+}
+
 

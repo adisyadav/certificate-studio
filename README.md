@@ -13,9 +13,23 @@ Certificate Studio is organized as a clean, decoupled monorepo:
 
 ---
 
-### Current Status: Milestone 6 (Production Reliability, Quality Assurance & Performance)
+### Current Status: Milestone 7 (Reusable Certificate Templates & Local Presets)
 
 ### Key Specifications & Architecture
+- **Reusable Local Template Presets (`PresetService`)**:
+  - Save configured certificate templates (template image, placement box, font, color, alignment, clearance margins, and sizing mode) under `storage/presets/{preset_id}/`.
+  - Stored with atomic metadata writes and zero participant or CSV data retention.
+  - Complete independence between presets and temporary jobs (`storage/jobs/`): deleting a job or creating a new project never deletes or mutates the preset.
+  - Deleting a preset never deletes jobs or exports created from it.
+- **Ingestion Preset Gallery (`SavedTemplates.tsx`)**:
+  - Displays saved templates with generated thumbnails, font family, and dimensions directly on the Ingestion tab.
+  - "Use Template" action creates an independent new job with restored template, placement, and typography, leaving CSV upload ready for the new batch.
+- **Visual Editor Preset Saving**:
+  - Secondary "Save Template" action in the Visual Editor toolbar with clean modal dialog.
+  - Prevents double submissions and provides immediate feedback.
+- **Batch-Aware Revalidation on Reuse**:
+  - When a saved template is loaded into a new job, old batch fitting analyses are never stale-reused.
+  - A newly uploaded CSV runs fresh batch analysis and validation with the existing Smart / Consistent sizing engine.
 - **Dedicated Quality Assurance Pipeline (`ValidationService`)**:
   - Full pre-export batch validation before PDF generation starts.
   - Validates template integrity, participant rows, placement boundary containment, font availability, and glyph support.
