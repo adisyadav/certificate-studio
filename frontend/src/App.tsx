@@ -1,48 +1,118 @@
 import React, { useEffect, useState } from 'react'
 import {
-  FileUp,
-  TableProperties,
-  SlidersHorizontal,
-  Download,
-  Activity,
+  Layers,
   CheckCircle2,
   XCircle,
   RefreshCw,
   Sparkles,
-  Layers,
   ArrowRight,
   ShieldCheck,
+  AlertTriangle,
+  FileCheck2,
 } from 'lucide-react'
-import { fetchHealth, type HealthStatus } from './api/client'
+import {
+  fetchHealth,
+  createJob,
+  uploadTemplate,
+  uploadCsv,
+  selectNameColumn,
+  type HealthStatus,
+  type JobResponse,
+} from './api/client'
+import { TemplateUploader } from './components/TemplateUploader'
+import { CsvUploader } from './components/CsvUploader'
 
 export const App: React.FC = () => {
   const [health, setHealth] = useState<HealthStatus | null>(null)
-  const [loading, setLoading] = useState<boolean>(true)
-  const [error, setError] = useState<string | null>(null)
-  const [lastChecked, setLastChecked] = useState<Date | null>(null)
+  const [healthLoading, setHealthLoading] = useState<boolean>(true)
 
-  const checkBackendHealth = async () => {
-    setLoading(true)
-    setError(null)
+  const [currentJob, setCurrentJob] = useState<JobResponse | null>(null)
+  const [isTemplateUploading, setIsTemplateUploading] = useState<boolean>(false)
+  const [isCsvUploading, setIsCsvUploading] = useState<boolean>(false)
+  const [globalError, setGlobalError] = useState<string | null>(null)
+
+  // Check health and initialize session job
+  const initApp = async () => {
+    setHealthLoading(true)
     try {
-      const data = await fetchHealth()
-      setHealth(data)
-      setLastChecked(new Date())
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        setError(err.message)
-      } else {
-        setError('Unable to connect to the backend server')
-      }
+      const h = await fetchHealth()
+      setHealth(h)
+    } catch {
       setHealth(null)
     } finally {
-      setLoading(false)
+      setHealthLoading(false)
+    }
+
+    // Initialize job session if not present
+    if (!currentJob) {
+      try {
+        const job = await createJob()
+        setCurrentJob(job)
+      } catch (err: unknown) {
+        if (err instanceof Error) {
+          setGlobalError(`Failed to initialize session: ${err.message}`)
+        }
+      }
     }
   }
 
   useEffect(() => {
-    checkBackendHealth()
+    initApp()
   }, [])
+
+  const handleTemplateUpload = async (file: File) => {
+    if (!currentJob) return
+    setIsTemplateUploading(true)
+    setGlobalError(null)
+    try {
+      const updatedJob = await uploadTemplate(currentJob.job_id, file)
+      setCurrentJob(updatedJob)
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setGlobalError(err.message)
+      }
+      throw err
+    } finally {
+      setIsTemplateUploading(false)
+    }
+  }
+
+  const handleCsvUpload = async (file: File) => {
+    if (!currentJob) return
+    setIsCsvUploading(true)
+    setGlobalError(null)
+    try {
+      const updatedJob = await uploadCsv(currentJob.job_id, file)
+      setCurrentJob(updatedJob)
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setGlobalError(err.message)
+      }
+      throw err
+    } finally {
+      setIsCsvUploading(false)
+    }
+  }
+
+  const handleSelectNameColumn = async (columnName: string) => {
+    if (!currentJob) return
+    setGlobalError(null)
+    try {
+      const updatedJob = await selectNameColumn(currentJob.job_id, columnName)
+      setCurrentJob(updatedJob)
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setGlobalError(err.message)
+      }
+      throw err
+    }
+  }
+
+  const isReadyForMilestone3 =
+    currentJob &&
+    currentJob.template !== null &&
+    currentJob.csv_summary !== null &&
+    currentJob.csv_summary.valid_count > 0
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased flex flex-col selection:bg-indigo-100 selection:text-indigo-900">
@@ -57,203 +127,184 @@ export const App: React.FC = () => {
               <span className="text-base font-semibold tracking-tight text-slate-900 block leading-tight">
                 Certificate Studio
               </span>
-              <span className="text-[11px] font-medium tracking-wide text-slate-600 uppercase block">
+              <span className="text-[11px] font-medium tracking-wide text-slate-500 uppercase block">
                 Local-First PDF Generator
               </span>
             </div>
           </div>
 
-          {/* Backend Connection Status Badge */}
+          {/* Status & Session ID */}
           <div className="flex items-center gap-3">
+            {currentJob && (
+              <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 text-xs font-mono">
+                <span>Job:</span>
+                <span className="font-semibold">{currentJob.job_id.slice(0, 8)}...</span>
+              </div>
+            )}
+
             <div
               className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                loading
+                healthLoading
                   ? 'bg-amber-50 border-amber-200 text-amber-700'
                   : health
                   ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
                   : 'bg-rose-50 border-rose-200 text-rose-700'
               }`}
             >
-              {loading ? (
+              {healthLoading ? (
                 <>
                   <RefreshCw className="h-3.5 w-3.5 animate-spin text-amber-500" />
-                  <span>Checking backend...</span>
+                  <span>Checking...</span>
                 </>
               ) : health ? (
                 <>
                   <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                  <span>API Connected (v{health.version})</span>
+                  <span>API Connected</span>
                 </>
               ) : (
                 <>
                   <XCircle className="h-3.5 w-3.5 text-rose-500" />
-                  <span>API Disconnected</span>
+                  <span>Backend Offline</span>
                 </>
               )}
             </div>
 
             <button
-              onClick={checkBackendHealth}
-              disabled={loading}
+              onClick={initApp}
+              disabled={healthLoading}
               className="p-1.5 text-slate-400 hover:text-slate-700 rounded-md hover:bg-slate-100 transition-colors disabled:opacity-50"
-              title="Refresh connection status"
+              title="Refresh connection"
               aria-label="Refresh connection"
             >
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-4 w-4 ${healthLoading ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </div>
       </header>
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-12 flex flex-col justify-between">
+      {/* Main Workspace */}
+      <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-8 flex flex-col justify-between">
         <div>
-          {/* Hero Section */}
-          <section className="max-w-3xl pt-4 pb-12">
-            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-medium mb-6">
+          {/* Headline & Overview */}
+          <section className="mb-8">
+            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-medium mb-3">
               <Sparkles className="h-3.5 w-3.5" />
-              <span>Milestone 1 — Architecture & Core Engine Foundation</span>
+              <span>Milestone 2 — File Upload and CSV Ingestion Workspace</span>
             </div>
 
-            <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight text-slate-900 leading-[1.15] mb-5">
-              Bulk certificate generation, engineered for precision.
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 leading-tight">
+              Ingest Template & Participant Records
             </h1>
-
-            <p className="text-lg text-slate-600 leading-relaxed font-normal mb-8 max-w-2xl">
-              Design and generate personalized, high-fidelity PDF certificates directly on your
-              machine. Visual placement editor, exact typography scaling, and full data privacy.
+            <p className="text-sm text-slate-600 font-normal mt-1 max-w-2xl">
+              Upload your design template and participant CSV. Original formats are preserved
+              without compression loss, and all data remains securely local.
             </p>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-slate-900 text-white text-sm font-medium shadow-sm hover:bg-slate-800 transition-colors cursor-not-allowed opacity-90">
-                <span>Upload Template & CSV</span>
-                <span className="text-[11px] uppercase tracking-wider bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded font-mono">
-                  Upcoming
-                </span>
-              </div>
-
-              <a
-                href="#workflow"
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg border border-slate-200 bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors"
-              >
-                <span>Explore Workflow</span>
-                <ArrowRight className="h-4 w-4 text-slate-400" />
-              </a>
-            </div>
           </section>
 
-          {/* Workflow & Architecture Preview Cards */}
-          <section id="workflow" className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-            <div className="p-6 rounded-xl bg-white border border-slate-200 shadow-xs flex flex-col justify-between">
+          {/* Global Error Banner */}
+          {globalError && (
+            <div className="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm flex items-start gap-3 shadow-xs">
+              <AlertTriangle className="h-5 w-5 shrink-0 text-rose-600 mt-0.5" />
               <div>
-                <div className="h-10 w-10 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 mb-4">
-                  <FileUp className="h-5 w-5" />
-                </div>
-                <h2 className="text-base font-semibold text-slate-900 mb-2">1. Template & Data Ingestion</h2>
-                <p className="text-sm text-slate-600 leading-relaxed">
-                  Upload PDF or raster image certificate templates alongside CSV participant lists.
-                  All parsing is processed locally with zero external leaks.
-                </p>
-              </div>
-              <div className="mt-6 pt-4 border-t border-slate-100 text-xs font-medium text-slate-600 flex items-center gap-1.5">
-                <ShieldCheck className="h-4 w-4 text-indigo-500" />
-                <span>Zero cloud uploads needed</span>
+                <p className="font-semibold">Action could not be completed</p>
+                <p className="text-xs text-rose-700 mt-0.5">{globalError}</p>
               </div>
             </div>
+          )}
 
-            <div className="p-6 rounded-xl bg-white border border-slate-200 shadow-xs flex flex-col justify-between">
-              <div>
-                <div className="h-10 w-10 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 mb-4">
-                  <SlidersHorizontal className="h-5 w-5" />
-                </div>
-                <h2 className="text-base font-semibold text-slate-900 mb-2">2. Visual Field Placement</h2>
-                <p className="text-sm text-slate-600 leading-relaxed">
-                  Interactive canvas powered by React Konva allows drag-and-drop coordinate
-                  calibration with live font metrics, alignment guides, and auto-shrink constraints.
-                </p>
-              </div>
-              <div className="mt-6 pt-4 border-t border-slate-100 text-xs font-medium text-slate-600 flex items-center gap-1.5">
-                <TableProperties className="h-4 w-4 text-indigo-500" />
-                <span>Deterministic layout engine</span>
-              </div>
-            </div>
+          {/* Upload Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <TemplateUploader
+              template={currentJob?.template || null}
+              onUpload={handleTemplateUpload}
+              isUploading={isTemplateUploading}
+            />
 
-            <div className="p-6 rounded-xl bg-white border border-slate-200 shadow-xs flex flex-col justify-between">
-              <div>
-                <div className="h-10 w-10 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 mb-4">
-                  <Download className="h-5 w-5" />
-                </div>
-                <h2 className="text-base font-semibold text-slate-900 mb-2">3. Deterministic Generation</h2>
-                <p className="text-sm text-slate-600 leading-relaxed">
-                  FastAPI layout backend compiles lossless vector PDF documents with PyMuPDF,
-                  handling duplicate names and text overflow gracefully.
-                </p>
-              </div>
-              <div className="mt-6 pt-4 border-t border-slate-100 text-xs font-medium text-slate-600 flex items-center gap-1.5">
-                <Activity className="h-4 w-4 text-indigo-500" />
-                <span>Batch validation & export</span>
-              </div>
-            </div>
-          </section>
+            <CsvUploader
+              csvSummary={currentJob?.csv_summary || null}
+              participants={currentJob?.participants_preview || []}
+              onUpload={handleCsvUpload}
+              onSelectColumn={handleSelectNameColumn}
+              isUploading={isCsvUploading}
+            />
+          </div>
 
-          {/* System Diagnostics / Health Status Panel */}
+          {/* Milestone 2 Readiness Status Card */}
           <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-xs">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
-              <div>
-                <h3 className="text-sm font-semibold text-slate-900">System Integration Status</h3>
-                <p className="text-xs text-slate-600">
-                  Verification of client-server connectivity for bulk generation services
-                </p>
-              </div>
-              <div className="text-xs text-slate-600 font-mono">
-                {lastChecked ? `Checked: ${lastChecked.toLocaleTimeString()}` : 'Not checked'}
-              </div>
-            </div>
-
-            <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="p-4 rounded-lg bg-slate-50 border border-slate-200/80">
-                <span className="text-xs font-medium text-slate-600 block mb-1">Backend Server</span>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`h-2 w-2 rounded-full ${
-                      health ? 'bg-emerald-500' : 'bg-rose-500'
-                    }`}
-                  />
-                  <span className="text-sm font-semibold text-slate-800">
-                    {health ? health.app : 'Offline'}
-                  </span>
+              <div className="flex items-center gap-2.5">
+                <FileCheck2 className="h-5 w-5 text-indigo-600" />
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    Ingestion Readiness State
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Verification of required assets prior to visual placement calibration
+                  </p>
                 </div>
               </div>
 
-              <div className="p-4 rounded-lg bg-slate-50 border border-slate-200/80">
-                <span className="text-xs font-medium text-slate-600 block mb-1">Health Endpoint</span>
-                <span className="text-sm font-mono text-slate-700 block truncate">
-                  GET /api/health
-                </span>
-                <span
-                  className={`text-[11px] font-medium block mt-0.5 ${
-                    health ? 'text-emerald-700' : 'text-rose-600'
-                  }`}
-                >
-                  {health ? `Status: ${health.status.toUpperCase()}` : error || 'Connection Error'}
-                </span>
+              <div>
+                {isReadyForMilestone3 ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    <span>Assets Validated & Ready</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                    <span>Awaiting files</span>
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+              <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200/80 flex items-center justify-between">
+                <div>
+                  <span className="text-slate-500 block mb-0.5">Template File</span>
+                  <span className="font-semibold text-slate-800">
+                    {currentJob?.template
+                      ? `${currentJob.template.format} (${currentJob.template.width}×${currentJob.template.height})`
+                      : 'Not uploaded'}
+                  </span>
+                </div>
+                {currentJob?.template && <CheckCircle2 className="h-4 w-4 text-emerald-600" />}
               </div>
 
-              <div className="p-4 rounded-lg bg-slate-50 border border-slate-200/80">
-                <span className="text-xs font-medium text-slate-600 block mb-1">Architecture State</span>
-                <span className="text-sm font-semibold text-slate-800 block">Milestone 1 Ready</span>
-                <span className="text-[11px] text-slate-600 block mt-0.5">
-                  Frontend & Backend decoupled
-                </span>
+              <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200/80 flex items-center justify-between">
+                <div>
+                  <span className="text-slate-500 block mb-0.5">Participant List</span>
+                  <span className="font-semibold text-slate-800">
+                    {currentJob?.csv_summary
+                      ? `${currentJob.csv_summary.valid_count} valid / ${currentJob.csv_summary.total_rows} total`
+                      : 'Not uploaded'}
+                  </span>
+                </div>
+                {currentJob?.csv_summary && (
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                )}
+              </div>
+
+              <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200/80 flex items-center justify-between">
+                <div>
+                  <span className="text-slate-500 block mb-0.5">Next Milestone</span>
+                  <span className="font-semibold text-slate-800">
+                    Milestone 3 (Visual Editor)
+                  </span>
+                </div>
+                <ArrowRight className="h-4 w-4 text-slate-400" />
               </div>
             </div>
           </section>
         </div>
 
         {/* Footer */}
-        <footer className="mt-12 pt-6 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-600 gap-4">
-          <span>Certificate Studio — Local-First PDF Generation</span>
-          <span>FastAPI • React • TypeScript • Vite • Tailwind CSS</span>
+        <footer className="mt-12 pt-6 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-4">
+          <div className="flex items-center gap-1.5">
+            <ShieldCheck className="h-4 w-4 text-indigo-600" />
+            <span>Certificate Studio — Local-First Data Privacy (Zero Cloud Uploads)</span>
+          </div>
+          <span>FastAPI • Pillow • PyMuPDF • React • TypeScript • Vite</span>
         </footer>
       </main>
     </div>

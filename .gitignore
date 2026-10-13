@@ -37,10 +37,15 @@ yarn-error.log*
 frontend/.env
 !frontend/.env.example
 
-# Temporary and Job Data (AGENTS.md compliance: keep local data safe and untracked)
+# Local storage and Job Data (AGENTS.md compliance: keep local data safe and untracked)
+storage/
 temp/
 tmp/
 generated/
 jobs/
+storage/jobs/
 *.pdf
 *.zip
+# Allow fixtures or test assets in test directories if created in future
+!tests/**
+!backend/tests/**
