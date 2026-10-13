@@ -13,23 +13,30 @@ Certificate Studio is organized as a clean, decoupled monorepo:
 
 ---
 
-## Current Status: Milestone 5.2 (Precision Name Placement and Glyph-Safe Auto Fit)
+## Current Status: Milestone 5.3 (Simplified Editor UX and Font Reliability)
 
 ### Key Specifications & Architecture
-- **Strict Glyph Ink Containment & Underline Protection**:
-  - Full ink bounding box measurement using Pillow FreeType font bounds rather than relying solely on EM line metrics.
-  - Negative glyph bearing handling (such as -11px in Allura or -1px in Great Vibes) ensuring ink starts strictly within safe horizontal boundaries.
-  - Automatic baseline clamping within safe vertical margins to guarantee decorative ascenders and descenders (e.g. flourishes on 'y', 'g', 'j', 'p', 'q') never cross safe area boundaries or overlap underlying certificate artwork/lines.
-- **Configurable Text Clearance Margins**:
-  - Configurable vertical and horizontal safety padding (default 8% vertical margin, 4% horizontal margin).
-  - Preserved consistently across backend layout calculation, live interactive preview, batch analysis, and PDF generation.
-  - Interactive UI controls with presets (4%, 8% default, 12%, 16%) and a fine-tuning slider.
-- **Precision Visual Placement & Safe-Area Guide**:
-  - Smooth user-controlled placement rectangle with resize handles.
-  - Visual inner safe-area guide (subtle dashed green guide) with toggle control, allowing users to precisely align the placement area above certificate lines without guessing margins.
-- **Reliable Validation Contract & Configuration Fingerprints**:
-  - Deterministic 16-character SHA-256 fingerprint incorporating template dimensions, placement box coordinates, font ID, sizes, color, alignment, clearance margins, and participant counts.
-  - Non-destructive save operations: saving identical placement or typography settings retains existing valid analysis results rather than setting them to `null`.
+- **Reliable Programmatic Font Loading**:
+  - Implemented `fontLoader.ts` with explicit `FontFace` loading and `document.fonts.load()` fallback.
+  - Added HTML font preloading tags in `index.html` and `font-display: swap` in `index.css`.
+  - Invalidate Konva canvas measurement caches on font load to completely eliminate silent font fallbacks to serif/sans-serif.
+  - Verified appearance of all five bundled certificate fonts (Great Vibes, Allura, Alex Brush, Cinzel, EB Garamond).
+- **Streamlined Visual Editor**:
+  - **One Rectangle Only**: Removed the distracting inner green safe guide and toggle button. The single blue dashed rectangle with handles represents the recipient area.
+  - Internal glyph containment and safe-margin calculations (8% vertical, 4% horizontal) remain active under the hood.
+  - **Default Visible Controls**:
+    - Certificate Font selector with live loading feedback.
+    - Text Color and Alignment.
+    - Participant Preview selector (Shortest, Longest, Widest chips + full CSV dropdown).
+    - **"Perfect Fit"** primary action button.
+    - Save & Continue actions.
+  - **Collapsed Advanced Settings**: Sliders for font sizes and margins are neatly tucked inside an optional accordion (closed by default).
+- **"Perfect Fit" Action & Automatic Initial Fitting**:
+  - Replaced separate Auto Fit and Analyze buttons with one primary "Perfect Fit" action.
+  - On first arrival to the visual editor, runs an initial automatic fit in the background so names fit out of the box without requiring manual button clicks.
+  - Generates clear, human-friendly feedback (e.g. *"All 20 names fit perfectly"* or *"2 names need more space. Widen the name area slightly"*).
+- **Preserved Export Fidelity**:
+  - 100% layout and font consistency between editor preview and generated PDFs in `certificates.zip`.
 - **Self-Sufficient Pre-Flight Readiness in Export Workspace**:
   - Automatically checks readiness and verifies all participant layouts upon entering Step 3 (Generate & Download) if analysis is missing or stale.
   - Eliminates the confusing requirement for users to manually click Analyze as an arbitrary prerequisite.
