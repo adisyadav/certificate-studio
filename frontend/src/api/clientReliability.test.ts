@@ -3,7 +3,6 @@ import {
   createJob,
   getJob,
   getTemplatePreviewUrl,
-  getPresetThumbnailUrl,
 } from './client'
 
 describe('Client Reliability & Error Handling Regression Tests', () => {
@@ -54,10 +53,5 @@ describe('Client Reliability & Error Handling Regression Tests', () => {
 
     const urlWithExistingQuery = getTemplatePreviewUrl('/api/jobs/123/template/preview?foo=bar', 'abc')
     expect(urlWithExistingQuery).toBe('http://localhost:8000/api/jobs/123/template/preview?foo=bar&v=abc')
-  })
-
-  it('getPresetThumbnailUrl correctly appends cache-busting version parameter', () => {
-    const url = getPresetThumbnailUrl('/api/presets/preset-1/thumbnail', 5)
-    expect(url).toBe('http://localhost:8000/api/presets/preset-1/thumbnail?v=5')
   })
 })

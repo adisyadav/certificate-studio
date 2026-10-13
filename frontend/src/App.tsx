@@ -27,7 +27,6 @@ import { TemplateUploader } from './components/TemplateUploader'
 import { CsvUploader } from './components/CsvUploader'
 import { CertificateEditor } from './components/CertificateEditor'
 import { ExportWorkspace } from './components/ExportWorkspace'
-import { SavedTemplates } from './components/SavedTemplates'
 
 import {
   getStoredJobId,
@@ -488,16 +487,6 @@ export const App: React.FC = () => {
                   isUploading={isCsvUploading}
                 />
               </div>
-
-              {/* Reusable Saved Templates Gallery */}
-              <SavedTemplates
-                onSelectPreset={(newJob) => {
-                  setCurrentJob(newJob)
-                  setStoredJobId(newJob.job_id)
-                  setGlobalError(null)
-                }}
-                disabled={isCreatingNewProject || backendOffline}
-              />
             </div>
           ) : activeTab === 'editor' && currentJob?.template ? (
             <CertificateEditor

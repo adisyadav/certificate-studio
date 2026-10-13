@@ -12,7 +12,6 @@ Certificate Studio provides an intuitive, professional workflow for event organi
 - **Visual Drag & Drop Placement**: Interactive, fixed-aspect-ratio canvas with live calligraphic font rendering, stationary viewport, and precision keyboard nudge controls.
 - **Batch-Consistent Typography**: Standard and short names share the same target size, while longer outlier names scale down proportionally without clipping or overflowing.
 - **Curated Certificate Fonts**: Bundled with 5 high-quality open-source fonts (*Great Vibes*, *Allura*, *Alex Brush*, *Cinzel*, *EB Garamond*).
-- **Reusable Template Presets**: Save configured template layouts (boundaries, fonts, colors, and margins) to reuse across future participant batches without repeating setup.
 - **Vector-Crisp PDF Export**: Individual personalized single-page PDFs packaged into a verified ZIP archive with bounded memory usage.
 
 ---
@@ -42,7 +41,7 @@ certificate-studio/
 ├── .gitignore              # Git ignore configuration
 ├── backend/
 │   ├── app/                # FastAPI application
-│   │   ├── api/            # REST API endpoints (jobs, typography, export, preset)
+│   │   ├── api/            # REST API endpoints (jobs, typography, export)
 │   │   ├── assets/fonts/   # Bundled TrueType fonts & OFL license texts
 │   │   ├── schemas/        # Pydantic v2 schemas
 │   │   ├── services/       # Core business logic (fitting, PDF generation, ZIP packaging)
@@ -50,11 +49,11 @@ certificate-studio/
 │   │   └── config.py       # Configuration settings
 │   ├── requirements.txt    # Clean Python dependencies
 │   ├── scripts/            # CLI utilities & benchmark scripts
-│   └── tests/              # Backend pytest test suite (73 tests)
+│   └── tests/              # Backend pytest test suite (70 tests)
 ├── frontend/
 │   ├── src/                # React 19 + TypeScript source
 │   │   ├── api/            # Typed backend API client
-│   │   ├── components/     # UI components (Upload, Editor, Export, Presets)
+│   │   ├── components/     # UI components (Upload, Editor, Export)
 │   │   └── utils/          # Coordinates, session, and font loader utilities
 │   ├── public/fonts/       # Bundled TrueType fonts for browser canvas
 │   ├── package.json        # Node dependencies & npm scripts

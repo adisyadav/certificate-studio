@@ -86,22 +86,12 @@ async def run_e2e_workflow():
         await page.wait_for_timeout(2000)
         await page.screenshot(path=os.path.join(ARTIFACTS_DIR, "e2e_editor_fitted.png"), full_page=True)
 
-        print("[E2E] 10. Saving template as reusable preset...")
-        save_tpl_btn = page.locator("button:has-text('Save Template')")
-        await save_tpl_btn.click()
-        await page.wait_for_selector("text=Save Template Preset", timeout=3000)
-        preset_input = page.locator("input[placeholder*='Annual']")
-        await preset_input.fill("E2E Automated Preset")
-        modal_save_btn = page.locator("button[type='submit']:has-text('Save Preset')")
-        await modal_save_btn.click()
-        await page.wait_for_selector("text=Template saved as \"E2E Automated Preset\"", timeout=5000)
-
-        print("[E2E] 11. Navigating to Export Screen...")
+        print("[E2E] 10. Navigating to Export Screen...")
         continue_export = page.locator("button:has-text('Continue to Export')")
         await continue_export.click()
         await page.wait_for_timeout(2000)
 
-        print("[E2E] 12. Generating batch certificates and downloading ZIP...")
+        print("[E2E] 11. Generating batch certificates and downloading ZIP...")
         gen_btn = page.locator("button:has-text('Generate Certificates')")
         if not await gen_btn.is_visible():
             gen_btn = page.locator("button:has-text('Regenerate Batch')")
@@ -121,7 +111,7 @@ async def run_e2e_workflow():
         assert os.path.exists(download_path), "Downloaded ZIP must exist on disk"
         print(f"[E2E] Downloaded ZIP saved to {download_path} ({os.path.getsize(download_path)} bytes)")
 
-        print("[E2E] 13. Verifying downloaded ZIP contents and opening all PDFs with PyMuPDF...")
+        print("[E2E] 12. Verifying downloaded ZIP contents and opening all PDFs with PyMuPDF...")
         with zipfile.ZipFile(download_path, 'r') as zf:
             zip_names = zf.namelist()
             pdf_names = [n for n in zip_names if n.lower().endswith('.pdf')]
@@ -139,30 +129,21 @@ async def run_e2e_workflow():
                 print(f"      Verified valid PDF: {pdf_name} ({rect.width}x{rect.height})")
                 doc.close()
 
-        print("[E2E] 14. Testing page reload session recovery...")
+        print("[E2E] 13. Testing page reload session recovery...")
         await page.reload()
         await page.wait_for_timeout(2000)
         assert await page.locator("text=Export Certificates").is_visible(), "Session should restore on Export tab"
         assert await page.locator("text=Configuration Summary").is_visible(), "Configuration Summary must be intact"
 
-        print("[E2E] 15. Testing New Project and reusing saved template preset...")
+        print("[E2E] 14. Testing New Project creation after batch completion...")
         new_project_btn2 = page.locator("button:has-text('New Project')")
         await new_project_btn2.click()
         await page.wait_for_timeout(2000)
-
-        # Check saved templates section has our preset
-        await page.wait_for_selector("text=E2E Automated Preset", timeout=5000)
-        use_template_btn = page.locator("button:has-text('Use Template')").first
-        await use_template_btn.click()
-        await page.wait_for_timeout(2000)
-
-        # Confirm template is loaded and CSV prompt is visible
-        assert await page.locator("text=Upload participant CSV").is_visible(), "CSV upload must be prompt"
-        img_reused = page.locator("img[alt='Certificate template preview']")
-        assert await img_reused.is_visible(), "Reused template preview image must be visible"
+        assert await page.locator("text=Upload Certificate & Participants").is_visible(), "Workspace should reset to upload"
 
         print("[E2E] All browser tests and verifications passed successfully!")
         await browser.close()
 
 if __name__ == "__main__":
     asyncio.run(run_e2e_workflow())
+
