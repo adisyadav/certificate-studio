@@ -59,6 +59,15 @@ export interface JobResponse {
   errors: string[]
 }
 
+export class ApiError extends Error {
+  status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
 export async function fetchHealth(): Promise<HealthStatus> {
@@ -67,7 +76,7 @@ export async function fetchHealth(): Promise<HealthStatus> {
   })
 
   if (!response.ok) {
-    throw new Error(`Failed to check health: ${response.status} ${response.statusText}`)
+    throw new ApiError(`Health check failed: ${response.status}`, response.status)
   }
 
   return response.json()
@@ -81,7 +90,7 @@ export async function createJob(): Promise<JobResponse> {
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => null)
-    throw new Error(errorData?.detail || `Failed to create job (${response.status})`)
+    throw new ApiError(errorData?.detail || `Failed to create job (${response.status})`, response.status)
   }
 
   return response.json()
@@ -94,7 +103,7 @@ export async function getJob(jobId: string): Promise<JobResponse> {
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => null)
-    throw new Error(errorData?.detail || `Failed to fetch job (${response.status})`)
+    throw new ApiError(errorData?.detail || `Failed to fetch job (${response.status})`, response.status)
   }
 
   return response.json()
@@ -111,7 +120,7 @@ export async function uploadTemplate(jobId: string, file: File): Promise<JobResp
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => null)
-    throw new Error(errorData?.detail || `Failed to upload template (${response.status})`)
+    throw new ApiError(errorData?.detail || `Failed to upload template (${response.status})`, response.status)
   }
 
   return response.json()
@@ -128,7 +137,7 @@ export async function uploadCsv(jobId: string, file: File): Promise<JobResponse>
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => null)
-    throw new Error(errorData?.detail || `Failed to upload CSV (${response.status})`)
+    throw new ApiError(errorData?.detail || `Failed to upload CSV (${response.status})`, response.status)
   }
 
   return response.json()
@@ -146,7 +155,7 @@ export async function selectNameColumn(jobId: string, columnName: string): Promi
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => null)
-    throw new Error(errorData?.detail || `Failed to select name column (${response.status})`)
+    throw new ApiError(errorData?.detail || `Failed to select name column (${response.status})`, response.status)
   }
 
   return response.json()
@@ -167,7 +176,7 @@ export async function savePlacement(
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => null)
-    throw new Error(errorData?.detail || `Failed to save placement (${response.status})`)
+    throw new ApiError(errorData?.detail || `Failed to save placement (${response.status})`, response.status)
   }
 
   return response.json()
@@ -180,7 +189,7 @@ export async function getPlacement(jobId: string): Promise<PlacementRegion | nul
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => null)
-    throw new Error(errorData?.detail || `Failed to get placement (${response.status})`)
+    throw new ApiError(errorData?.detail || `Failed to get placement (${response.status})`, response.status)
   }
 
   const data = await response.json()

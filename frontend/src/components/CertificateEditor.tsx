@@ -151,11 +151,24 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
     }
   }, [currentPlacement, stageSize])
 
+  // Warn user before leaving page with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [hasUnsavedChanges])
+
   // 4. Default placement if none exists yet
   useEffect(() => {
-    if (!currentPlacement && savedPlacement) {
+    if (savedPlacement) {
       setCurrentPlacement(savedPlacement)
-    } else if (!currentPlacement && !savedPlacement) {
+      setHasUnsavedChanges(false)
+    } else if (!currentPlacement) {
       // Sensible initial placement in the center
       const defaultNorm: PlacementRegion = {
         x: 0.2,

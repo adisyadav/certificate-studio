@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import {
   Layers,
   CheckCircle2,
@@ -11,6 +11,7 @@ import {
   FileCheck2,
   SlidersHorizontal,
   UploadCloud,
+  ServerCrash,
 } from 'lucide-react'
 import {
   fetchHealth,
@@ -20,6 +21,7 @@ import {
   uploadCsv,
   selectNameColumn,
   savePlacement,
+  ApiError,
   type HealthStatus,
   type JobResponse,
   type PlacementRegion,
@@ -27,52 +29,119 @@ import {
 import { TemplateUploader } from './components/TemplateUploader'
 import { CsvUploader } from './components/CsvUploader'
 import { CertificateEditor } from './components/CertificateEditor'
+import {
+  getStoredJobId,
+  setStoredJobId,
+  clearStoredJobId,
+  getStoredActiveTab,
+  setStoredActiveTab,
+  type AppTab,
+} from './utils/session'
 
 export const App: React.FC = () => {
   const [health, setHealth] = useState<HealthStatus | null>(null)
   const [healthLoading, setHealthLoading] = useState<boolean>(true)
 
   const [currentJob, setCurrentJob] = useState<JobResponse | null>(null)
-  const [activeTab, setActiveTab] = useState<'upload' | 'editor'>('upload')
+  const [activeTab, setActiveTab] = useState<AppTab>('upload')
+  const [isRestoringSession, setIsRestoringSession] = useState<boolean>(true)
   const [isTemplateUploading, setIsTemplateUploading] = useState<boolean>(false)
   const [isCsvUploading, setIsCsvUploading] = useState<boolean>(false)
   const [globalError, setGlobalError] = useState<string | null>(null)
+  const [backendOffline, setBackendOffline] = useState<boolean>(false)
 
-  // Check health and initialize session job
-  const initApp = async () => {
+  // Initialize or restore session
+  const initApp = useCallback(async () => {
     setHealthLoading(true)
+    setGlobalError(null)
+    setBackendOffline(false)
+
+    let isApiHealthy = false
     try {
       const h = await fetchHealth()
       setHealth(h)
+      isApiHealthy = true
     } catch {
       setHealth(null)
+      isApiHealthy = false
     } finally {
       setHealthLoading(false)
     }
 
-    // Initialize job session if not present, or reload if already present
-    if (!currentJob) {
+    if (!isApiHealthy) {
+      // Backend is unreachable; DO NOT delete stored job ID
+      setBackendOffline(true)
+      setIsRestoringSession(false)
+      return
+    }
+
+    // Backend is reachable: attempt session recovery or creation
+    const storedJobId = getStoredJobId()
+    const storedTab = getStoredActiveTab()
+
+    if (storedJobId) {
       try {
-        const job = await createJob()
-        setCurrentJob(job)
+        const existingJob = await getJob(storedJobId)
+        setCurrentJob(existingJob)
+        setStoredJobId(existingJob.job_id)
+
+        // Restore tab if template exists and user was in editor
+        if (storedTab === 'editor' && existingJob.template) {
+          setActiveTab('editor')
+        } else {
+          setActiveTab('upload')
+          setStoredActiveTab('upload')
+        }
+      } catch (err: unknown) {
+        if (err instanceof ApiError && err.status === 404) {
+          // Job expired or not found on server -> safely clear and start fresh
+          clearStoredJobId()
+          try {
+            const newJob = await createJob()
+            setCurrentJob(newJob)
+            setStoredJobId(newJob.job_id)
+            setActiveTab('upload')
+            setStoredActiveTab('upload')
+          } catch (createErr: unknown) {
+            if (createErr instanceof Error) {
+              setGlobalError(`Failed to initialize session: ${createErr.message}`)
+            }
+          }
+        } else {
+          // Temporary error or connection issue -> do NOT clear stored job ID
+          if (err instanceof Error) {
+            setGlobalError(`Failed to restore session: ${err.message}`)
+          }
+        }
+      } finally {
+        setIsRestoringSession(false)
+      }
+    } else {
+      // No stored job ID -> create a new job session
+      try {
+        const newJob = await createJob()
+        setCurrentJob(newJob)
+        setStoredJobId(newJob.job_id)
+        setActiveTab('upload')
+        setStoredActiveTab('upload')
       } catch (err: unknown) {
         if (err instanceof Error) {
           setGlobalError(`Failed to initialize session: ${err.message}`)
         }
-      }
-    } else {
-      try {
-        const refreshed = await getJob(currentJob.job_id)
-        setCurrentJob(refreshed)
-      } catch {
-        // keep currentJob
+      } finally {
+        setIsRestoringSession(false)
       }
     }
-  }
+  }, [])
 
   useEffect(() => {
     initApp()
-  }, [])
+  }, [initApp])
+
+  const handleTabChange = (tab: AppTab) => {
+    setActiveTab(tab)
+    setStoredActiveTab(tab)
+  }
 
   const handleTemplateUpload = async (file: File) => {
     if (!currentJob) return
@@ -81,6 +150,7 @@ export const App: React.FC = () => {
     try {
       const updatedJob = await uploadTemplate(currentJob.job_id, file)
       setCurrentJob(updatedJob)
+      setStoredJobId(updatedJob.job_id)
     } catch (err: unknown) {
       if (err instanceof Error) {
         setGlobalError(err.message)
@@ -98,6 +168,7 @@ export const App: React.FC = () => {
     try {
       const updatedJob = await uploadCsv(currentJob.job_id, file)
       setCurrentJob(updatedJob)
+      setStoredJobId(updatedJob.job_id)
     } catch (err: unknown) {
       if (err instanceof Error) {
         setGlobalError(err.message)
@@ -114,6 +185,7 @@ export const App: React.FC = () => {
     try {
       const updatedJob = await selectNameColumn(currentJob.job_id, columnName)
       setCurrentJob(updatedJob)
+      setStoredJobId(updatedJob.job_id)
     } catch (err: unknown) {
       if (err instanceof Error) {
         setGlobalError(err.message)
@@ -128,6 +200,7 @@ export const App: React.FC = () => {
     try {
       const updatedJob = await savePlacement(currentJob.job_id, placement)
       setCurrentJob(updatedJob)
+      setStoredJobId(updatedJob.job_id)
     } catch (err: unknown) {
       if (err instanceof Error) {
         setGlobalError(err.message)
@@ -142,6 +215,61 @@ export const App: React.FC = () => {
 
   const canOpenEditor = hasTemplate
   const canContinueToGeneration = hasTemplate && hasParticipants && hasSavedPlacement
+
+  // 1. Loading / Session restoration state (prevents flashing empty upload screen)
+  if (isRestoringSession) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center select-none font-sans">
+        <div className="h-12 w-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-200 mb-4 animate-bounce">
+          <Layers className="h-6 w-6" />
+        </div>
+        <h2 className="text-base font-semibold text-slate-800 mb-1">
+          Restoring Certificate Studio Session...
+        </h2>
+        <p className="text-xs text-slate-500 max-w-sm mb-4">
+          Recovering your certificate template, participant data, and visual placement coordinates.
+        </p>
+        <div className="flex items-center gap-2 text-xs text-indigo-600 font-medium">
+          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+          <span>Synchronizing with local engine...</span>
+        </div>
+      </div>
+    )
+  }
+
+  // 2. Offline / Server unreachable recovery screen (graceful resilience without erasing stored session)
+  if (backendOffline && !currentJob) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center font-sans">
+        <div className="max-w-md w-full bg-white rounded-2xl border border-slate-200 p-8 shadow-xs">
+          <div className="h-12 w-12 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center mx-auto mb-4">
+            <ServerCrash className="h-6 w-6" />
+          </div>
+          <h2 className="text-lg font-semibold text-slate-900 mb-1">
+            Backend Server Unreachable
+          </h2>
+          <p className="text-xs text-slate-500 leading-relaxed mb-6">
+            Unable to connect to the FastAPI backend at <code className="font-mono bg-slate-100 px-1 py-0.5 rounded text-slate-700">http://localhost:8000</code>.
+            Your local session and job ID are preserved safely.
+          </p>
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={initApp}
+              disabled={healthLoading}
+              className="w-full py-2 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium shadow-sm transition-colors flex items-center justify-center gap-2"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${healthLoading ? 'animate-spin' : ''}`} />
+              <span>Retry Connection</span>
+            </button>
+            <p className="text-[11px] text-slate-400">
+              Ensure <code className="font-mono">uvicorn app.main:app</code> is running in your backend terminal.
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased flex flex-col selection:bg-indigo-100 selection:text-indigo-900">
@@ -166,7 +294,7 @@ export const App: React.FC = () => {
           <div className="hidden md:flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs font-medium">
             <button
               type="button"
-              onClick={() => setActiveTab('upload')}
+              onClick={() => handleTabChange('upload')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all ${
                 activeTab === 'upload'
                   ? 'bg-white text-slate-900 shadow-xs font-semibold'
@@ -182,7 +310,7 @@ export const App: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => canOpenEditor && setActiveTab('editor')}
+              onClick={() => canOpenEditor && handleTabChange('editor')}
               disabled={!canOpenEditor}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all ${
                 activeTab === 'editor'
@@ -269,7 +397,7 @@ export const App: React.FC = () => {
               <section className="mb-8">
                 <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-medium mb-3">
                   <Sparkles className="h-3.5 w-3.5" />
-                  <span>Milestone 2 & 3 — File Ingestion & Placement Calibration</span>
+                  <span>Persistent Ingestion & Placement Workspace</span>
                 </div>
 
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -279,14 +407,14 @@ export const App: React.FC = () => {
                     </h1>
                     <p className="text-sm text-slate-600 font-normal mt-1 max-w-2xl">
                       Upload your certificate template (PNG, JPG, PDF) and participant CSV.
-                      All processing remains 100% local on your machine.
+                      Your session is preserved locally across page refreshes.
                     </p>
                   </div>
 
                   {canOpenEditor && (
                     <button
                       type="button"
-                      onClick={() => setActiveTab('editor')}
+                      onClick={() => handleTabChange('editor')}
                       className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-sm transition-colors shrink-0"
                     >
                       <span>Open Visual Editor</span>
@@ -385,7 +513,7 @@ export const App: React.FC = () => {
                     ) : (
                       <button
                         type="button"
-                        onClick={() => canOpenEditor && setActiveTab('editor')}
+                        onClick={() => canOpenEditor && handleTabChange('editor')}
                         disabled={!canOpenEditor}
                         className="text-indigo-600 hover:text-indigo-800 font-medium disabled:opacity-50"
                       >
@@ -403,7 +531,7 @@ export const App: React.FC = () => {
                 savedPlacement={currentJob.placement}
                 participants={currentJob.participants_preview}
                 onSavePlacement={handleSavePlacement}
-                onBackToUpload={() => setActiveTab('upload')}
+                onBackToUpload={() => handleTabChange('upload')}
                 onContinue={() => {
                   alert(
                     'Milestone 3 complete! The name placement is saved. Authoritative rendering and batch generation will be unlocked in Milestone 4.'
