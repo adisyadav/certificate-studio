@@ -8,49 +8,47 @@ A local-first, privacy-respecting web application for bulk generating personaliz
 
 Certificate Studio is organized as a clean, decoupled monorepo:
 
-- **`backend/`**: Python FastAPI service providing API endpoints, file ingestion (Pillow, PyMuPDF), CSV parsing, normalized placement validation, and atomic job storage.
+- **`backend/`**: Python FastAPI service providing API endpoints, file ingestion (Pillow, PyMuPDF), font glyph inspection (`fontTools`), deterministic typography fitting, preview rendering, and atomic job storage.
 - **`frontend/`**: React 19 application built with TypeScript, Vite, Tailwind CSS, and React Konva for visual coordinate placement.
 
 ---
 
-## Current Status: Milestone 3 & Session Persistence
+## Current Status: Milestone 4 (Typography and Rendering Engine)
 
 ### Features Implemented
-1. **Full Session Persistence & Recovery**:
-   - Persists the active `job_id` and active workflow step in browser `localStorage`.
-   - On application startup or browser refresh (`Cmd + R`):
-     - Validates and restores the job session, template preview, CSV participant list, and saved placement.
-     - Automatically returns users to the Visual Editor if they were previously editing.
-     - Dedicated restoring state prevents any flashing of the empty upload screen.
-   - **Backend Failure Resilience**: If the backend is temporarily offline, the stored job ID is preserved and a "Retry Connection" view is presented.
-   - **Stale ID Handling**: Only if the backend explicitly reports HTTP 404 does the client discard the stale ID and start a fresh session.
-   - **Unsaved Edits Guard**: Warns users via `beforeunload` if they attempt to refresh or navigate away with unsaved placement modifications.
-2. **Interactive Visual Placement Editor (React Konva)**:
-   - Visual certificate canvas preserving original template aspect ratio (landscape, portrait, and square).
-   - Allows users to drag-and-drop or click-and-drag to select the recipient-name bounding box.
-   - Resize handles with boundary-constrained transformation.
-   - Non-draggable certificate background preventing accidental displacement.
-   - Keyboard accessibility: Arrow keys nudge placement, Shift+Arrow expands step size.
-   - Live sample text positioning preview with instant toggle between Short name ("Jane Doe"), Long name ("Dr. Alexander Montgomery-Cunningham III"), and actual CSV participants.
-3. **Normalized Coordinate System**:
-   - Stores coordinates strictly normalized between `0.0` and `1.0`:
-     ```json
-     {
-       "x": 0.25,
-       "y": 0.45,
-       "width": 0.50,
-       "height": 0.12
-     }
-     ```
-   - Immune to browser window resizing, display scaling, and high-DPI screens.
-4. **Placement API & Atomic Persistence**:
-   - `POST /api/jobs/{job_id}/placement`: Validates boundaries (`x + width <= 1.0`, `y + height <= 1.0`, `width > 0`, `height > 0`).
-   - `GET /api/jobs/{job_id}/placement`: Retrieves saved placement.
-   - Atomic persistence inside `storage/jobs/{job_id}/job.json`.
-   - **Template Replacement Invalidation**: Uploading a new template automatically clears previous placement to prevent mismatched layout coordinates.
-5. **Ingestion & Processing**:
-   - High-fidelity template ingestion (PNG, JPG, single-page PDF) with PyMuPDF and Pillow.
-   - CSV parsing with UTF-8 / UTF-8-BOM support, candidate name column detection, duplicate tracking, and blank row validation.
+1. **Font System with Bundled OFL Fonts**:
+   - Bundles 5 legally redistributable, open-source fonts with their respective `OFL.txt` licenses:
+     - `great_vibes`: Great Vibes (flowing calligraphy)
+     - `allura`: Allura (formal script)
+     - `alex_brush`: Alex Brush (classic quick script)
+     - `cinzel`: Cinzel (classical regal serif)
+     - `eb_garamond`: EB Garamond (readable traditional serif)
+   - Font glyph coverage validation using `fontTools.ttLib.TTFont` `cmap` inspection.
+   - Proactively reports unsupported characters rather than rendering missing-glyph boxes.
+2. **Authoritative Typography Engine (`typography_service.py`)**:
+   - Precise visual ink bounding box calculation (`draw.textbbox`) accounting for ascenders, descenders, and decorative calligraphic flourishes.
+   - Deterministic binary search font fitting between configured `preferred_font_size` and `min_font_size`.
+   - Never silently shrinks text below the minimum readable size threshold (`min_font_size`).
+   - Centers text horizontally and vertically with safe padding constraints.
+   - Distinct coordinate systems: pixels (`px`) for raster templates, standard PDF points (`pt`, 1/72 inch) for vector documents.
+3. **Lossless Rendering Engine (`rendering_service.py`)**:
+   - Renders participant names onto copies of the original template without modifying stored files.
+   - Antialiased high-resolution preview generation for PNG, JPG, and single-page PDF templates.
+   - Configurable text color (HEX) and horizontal text alignment (center, left, right).
+4. **Batch Typography Analysis (`batch_analysis_service.py`)**:
+   - Analyzes all participant records in the CSV:
+     - Identifies shortest name, longest name by characters, and widest name by visual rendered width.
+     - Detects names requiring automatic font-size reduction.
+     - Flags overflowing names that exceed bounds at the minimum font size.
+     - Flags names with unsupported glyphs.
+   - Invalidation: Modifying placement, template, or typography automatically invalidates previous analysis.
+5. **Interactive Dual-Mode Frontend Editor**:
+   - Mode 1: Interactive Placement Canvas (React Konva) for dragging and resizing the bounding box.
+   - Mode 2: Authoritative Backend Preview displaying the exact font rasterization.
+   - Font family dropdown, color picker, preferred and minimum font size sliders, and sample participant selectors.
+   - Real-time batch analysis report with one-click preview of the widest participant name.
+6. **Session Persistence**:
+   - Full recovery of job session, uploaded assets, selected column, placement, and typography across page reloads.
 
 ---
 
@@ -133,26 +131,21 @@ npm test
 
 ---
 
-## Acceptance Testing: Session Persistence
+## Acceptance Testing: Milestone 4
 
 1. Start both the backend (`http://localhost:8000`) and frontend (`http://localhost:5173`).
 2. Open `http://localhost:5173` in your browser.
-3. In **Step 1 (Ingestion)**: Upload a certificate template and a participant CSV.
+3. In **Step 1 (Ingestion)**: Upload a certificate template and CSV.
 4. Switch to **Step 2 (Visual Editor)**:
-   - Position and resize the name box.
-   - Click **Save Placement**.
-5. **Refresh the Browser (`Cmd + R`)**:
-   - Verify that the application displays the restoring state briefly and seamlessly restores the **Visual Editor**, the certificate template, CSV participants, and saved placement box.
-6. **Close Tab & Reopen**:
-   - Close the browser tab and reopen `http://localhost:5173`.
-   - Verify that the session is restored identically.
-7. **Backend Offline Resilience**:
-   - Stop the backend server process in your terminal (`Ctrl + C`).
-   - Refresh the browser.
-   - Verify that the "Backend Server Unreachable" retry card is shown **without** wiping the stored job ID.
-   - Restart the backend server (`uvicorn app.main:app --reload --port 8000`).
-   - Click **Retry Connection** in the UI and confirm full recovery of your session.
-8. **Automated Test Suites**:
-   - Backend: `pytest -v` (26 tests pass).
+   - Position the bounding box in the placement canvas.
+   - Choose a calligraphic font (e.g. **Great Vibes** or **Allura**).
+   - Change the text color and adjust preferred / minimum font sizes.
+   - Click **Save Configuration**.
+   - Switch to **"2. Authoritative Backend Preview"** to view the backend-rendered PNG.
+   - Switch between **Short Name**, **Long Name**, and actual CSV participants.
+   - Click **"Analyze"** in the **Batch Fitting Analysis** card to identify the widest name and check for any overflows.
+   - Click on the detected widest name to preview it immediately.
+5. **Run Automated Test Suites**:
+   - Backend: `pytest -v` (34 tests pass).
    - Frontend: `npm test` (6 tests pass).
-   - Frontend build: `npm run build` (0 errors).
+   - Frontend build: `npm run build` (0 TypeScript errors).

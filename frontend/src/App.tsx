@@ -21,10 +21,12 @@ import {
   uploadCsv,
   selectNameColumn,
   savePlacement,
+  saveTypography,
   ApiError,
   type HealthStatus,
   type JobResponse,
   type PlacementRegion,
+  type TypographyConfig,
 } from './api/client'
 import { TemplateUploader } from './components/TemplateUploader'
 import { CsvUploader } from './components/CsvUploader'
@@ -199,6 +201,21 @@ export const App: React.FC = () => {
     setGlobalError(null)
     try {
       const updatedJob = await savePlacement(currentJob.job_id, placement)
+      setCurrentJob(updatedJob)
+      setStoredJobId(updatedJob.job_id)
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setGlobalError(err.message)
+      }
+      throw err
+    }
+  }
+
+  const handleSaveTypography = async (typography: TypographyConfig) => {
+    if (!currentJob) return
+    setGlobalError(null)
+    try {
+      const updatedJob = await saveTypography(currentJob.job_id, typography)
       setCurrentJob(updatedJob)
       setStoredJobId(updatedJob.job_id)
     } catch (err: unknown) {
@@ -527,14 +544,18 @@ export const App: React.FC = () => {
           ) : (
             currentJob?.template && (
               <CertificateEditor
+                jobId={currentJob.job_id}
                 template={currentJob.template}
                 savedPlacement={currentJob.placement}
+                savedTypography={currentJob.typography}
+                savedBatchAnalysis={currentJob.batch_analysis}
                 participants={currentJob.participants_preview}
                 onSavePlacement={handleSavePlacement}
+                onSaveTypography={handleSaveTypography}
                 onBackToUpload={() => handleTabChange('upload')}
                 onContinue={() => {
                   alert(
-                    'Milestone 3 complete! The name placement is saved. Authoritative rendering and batch generation will be unlocked in Milestone 4.'
+                    'Milestone 4 complete! Placement and typography configuration are validated. Batch PDF export and ZIP generation will be performed in Milestone 5.'
                   )
                 }}
                 canContinue={canContinueToGeneration}

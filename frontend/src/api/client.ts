@@ -6,6 +6,48 @@ export interface HealthStatus {
 
 export type JobStatus = 'created' | 'template_uploaded' | 'csv_uploaded' | 'ready'
 export type TemplateOrientation = 'landscape' | 'portrait' | 'square'
+export type TextAlignment = 'center' | 'left' | 'right'
+
+export interface FontInfo {
+  id: string
+  name: string
+  category: string
+  filename: string
+  sample_text: string
+}
+
+export interface TypographyConfig {
+  font_id: string
+  preferred_font_size: number
+  min_font_size: number
+  text_color: string
+  alignment: TextAlignment
+}
+
+export interface ParticipantTypographyAnalysis {
+  row_number: number
+  name: string
+  fitted_font_size: number
+  is_overflowing: boolean
+  requires_reduction: boolean
+  has_unsupported_glyphs: boolean
+  unsupported_glyphs: string[]
+  visual_width: number
+}
+
+export interface BatchTypographyReport {
+  total_analyzed: number
+  all_fit: boolean
+  overflow_count: number
+  reduction_count: number
+  unsupported_glyph_count: number
+  shortest_name: string | null
+  longest_name_by_chars: string | null
+  widest_name: string | null
+  widest_visual_width: number
+  participants_analysis: ParticipantTypographyAnalysis[]
+  warnings: string[]
+}
 
 export interface TemplateMetadata {
   filename: string
@@ -54,6 +96,8 @@ export interface JobResponse {
   template: TemplateMetadata | null
   csv_summary: CsvSummary | null
   placement: PlacementRegion | null
+  typography: TypographyConfig | null
+  batch_analysis: BatchTypographyReport | null
   participants_preview: ParticipantRecord[]
   warnings: string[]
   errors: string[]
@@ -77,6 +121,18 @@ export async function fetchHealth(): Promise<HealthStatus> {
 
   if (!response.ok) {
     throw new ApiError(`Health check failed: ${response.status}`, response.status)
+  }
+
+  return response.json()
+}
+
+export async function fetchFonts(): Promise<FontInfo[]> {
+  const response = await fetch(`${API_BASE_URL}/api/fonts`, {
+    headers: { Accept: 'application/json' },
+  })
+
+  if (!response.ok) {
+    throw new ApiError(`Failed to fetch fonts (${response.status})`, response.status)
   }
 
   return response.json()
@@ -182,18 +238,56 @@ export async function savePlacement(
   return response.json()
 }
 
-export async function getPlacement(jobId: string): Promise<PlacementRegion | null> {
-  const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/placement`, {
+export async function saveTypography(
+  jobId: string,
+  typography: TypographyConfig
+): Promise<JobResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/typography`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(typography),
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null)
+    throw new ApiError(errorData?.detail || `Failed to save typography (${response.status})`, response.status)
+  }
+
+  return response.json()
+}
+
+export async function analyzeTypography(jobId: string): Promise<BatchTypographyReport> {
+  const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/analyze-typography`, {
+    method: 'POST',
     headers: { Accept: 'application/json' },
   })
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => null)
-    throw new ApiError(errorData?.detail || `Failed to get placement (${response.status})`, response.status)
+    throw new ApiError(errorData?.detail || `Failed to analyze typography (${response.status})`, response.status)
   }
 
-  const data = await response.json()
-  return data.placement
+  return response.json()
+}
+
+export function getRenderedPreviewUrl(
+  jobId: string,
+  params?: { participantRow?: number; sampleText?: string; v?: number }
+): string {
+  const url = new URL(`${API_BASE_URL}/api/jobs/${jobId}/preview`)
+  if (params?.participantRow) {
+    url.searchParams.set('participant_row', String(params.participantRow))
+  }
+  if (params?.sampleText) {
+    url.searchParams.set('sample_text', params.sampleText)
+  }
+  if (params?.v) {
+    url.searchParams.set('v', String(params.v))
+  }
+  return url.toString()
 }
 
 export function getTemplatePreviewUrl(relativeUrl: string): string {

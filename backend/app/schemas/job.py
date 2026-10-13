@@ -4,6 +4,7 @@ from enum import Enum
 from datetime import datetime
 
 from app.schemas.placement import PlacementRegion
+from app.schemas.typography import TypographyConfig, BatchTypographyReport
 
 
 class JobStatus(str, Enum):
@@ -59,6 +60,8 @@ class JobResponse(BaseModel):
     template: Optional[TemplateMetadata] = None
     csv_summary: Optional[CsvSummary] = None
     placement: Optional[PlacementRegion] = None
+    typography: Optional[TypographyConfig] = None
+    batch_analysis: Optional[BatchTypographyReport] = None
     participants_preview: List[ParticipantRecord] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list)
     errors: List[str] = Field(default_factory=list)

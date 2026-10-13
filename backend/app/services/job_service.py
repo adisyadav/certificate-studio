@@ -14,6 +14,7 @@ from app.schemas.job import (
     ParticipantRecord,
 )
 from app.schemas.placement import PlacementRegion
+from app.schemas.typography import TypographyConfig, BatchTypographyReport
 
 
 class JobNotFoundError(Exception):
@@ -23,18 +24,14 @@ class JobNotFoundError(Exception):
 class JobService:
     @classmethod
     def get_job_dir(cls, job_id: str) -> Path:
-        # Validate format of job_id to prevent path traversal
         clean_id = job_id.strip()
-        # Verify valid UUID or alphanumeric string
         try:
             uuid.UUID(clean_id)
         except ValueError:
-            # Allow clean alphanumeric string
             if not clean_id.isalnum() and not all(c in "0123456789abcdefABCDEF-" for c in clean_id):
                 raise JobNotFoundError(f"Invalid job identifier: {clean_id}")
 
         job_dir = settings.storage_dir / "jobs" / clean_id
-        # Strict directory containment check
         try:
             job_dir.resolve().relative_to(settings.storage_dir.resolve())
         except ValueError:
@@ -55,6 +52,8 @@ class JobService:
             "template": None,
             "csv_summary": None,
             "placement": None,
+            "typography": TypographyConfig().model_dump(),
+            "batch_analysis": None,
             "participants": [],
             "warnings": [],
             "errors": [],
@@ -74,6 +73,16 @@ class JobService:
         return cls._to_response(data)
 
     @classmethod
+    def get_all_participants(cls, job_id: str) -> List[ParticipantRecord]:
+        job_dir = cls.get_job_dir(job_id)
+        meta_file = job_dir / "job.json"
+        if not meta_file.exists():
+            raise JobNotFoundError(f"Job {job_id} not found.")
+
+        data = json.loads(meta_file.read_text(encoding="utf-8"))
+        return [ParticipantRecord(**p) for p in data.get("participants", [])]
+
+    @classmethod
     def update_template(
         cls, job_id: str, template: TemplateMetadata
     ) -> JobResponse:
@@ -85,10 +94,10 @@ class JobService:
         data = json.loads(meta_file.read_text(encoding="utf-8"))
         data["template"] = template.model_dump()
 
-        # Invalidate previous placement when template changes
+        # Invalidate previous placement and batch analysis when template changes
         data["placement"] = None
+        data["batch_analysis"] = None
 
-        # Update status
         if data.get("csv_summary"):
             data["status"] = JobStatus.READY.value
         else:
@@ -110,12 +119,13 @@ class JobService:
         if not meta_file.exists():
             raise JobNotFoundError(f"Job {job_id} not found.")
 
-        # Invalidate previous participants and persist original raw CSV
         (job_dir / "participants.csv").write_bytes(raw_csv_bytes)
 
         data = json.loads(meta_file.read_text(encoding="utf-8"))
         data["csv_summary"] = summary.model_dump()
         data["participants"] = [p.model_dump() for p in participants]
+        # Invalidate batch analysis when CSV changes
+        data["batch_analysis"] = None
 
         if data.get("template"):
             data["status"] = JobStatus.READY.value
@@ -136,6 +146,40 @@ class JobService:
 
         data = json.loads(meta_file.read_text(encoding="utf-8"))
         data["placement"] = placement.model_dump()
+        # Invalidate previous batch analysis when placement region changes
+        data["batch_analysis"] = None
+
+        cls._save_atomic(job_dir, data)
+        return cls._to_response(data)
+
+    @classmethod
+    def save_typography_config(
+        cls, job_id: str, config: TypographyConfig
+    ) -> JobResponse:
+        job_dir = cls.get_job_dir(job_id)
+        meta_file = job_dir / "job.json"
+        if not meta_file.exists():
+            raise JobNotFoundError(f"Job {job_id} not found.")
+
+        data = json.loads(meta_file.read_text(encoding="utf-8"))
+        data["typography"] = config.model_dump()
+        # Invalidate previous batch analysis when typography settings change
+        data["batch_analysis"] = None
+
+        cls._save_atomic(job_dir, data)
+        return cls._to_response(data)
+
+    @classmethod
+    def save_batch_analysis(
+        cls, job_id: str, report: BatchTypographyReport
+    ) -> JobResponse:
+        job_dir = cls.get_job_dir(job_id)
+        meta_file = job_dir / "job.json"
+        if not meta_file.exists():
+            raise JobNotFoundError(f"Job {job_id} not found.")
+
+        data = json.loads(meta_file.read_text(encoding="utf-8"))
+        data["batch_analysis"] = report.model_dump()
 
         cls._save_atomic(job_dir, data)
         return cls._to_response(data)
@@ -144,6 +188,16 @@ class JobService:
     def get_placement(cls, job_id: str) -> Optional[PlacementRegion]:
         job = cls.get_job(job_id)
         return job.placement
+
+    @classmethod
+    def get_original_template_path(cls, job_id: str) -> Path:
+        job_dir = cls.get_job_dir(job_id)
+        # Search for saved original template file
+        for ext in [".png", ".jpg", ".jpeg", ".pdf"]:
+            candidate = job_dir / f"template_original{ext}"
+            if candidate.exists():
+                return candidate
+        raise JobNotFoundError("Original template file not found.")
 
     @classmethod
     def get_raw_csv_bytes(cls, job_id: str) -> bytes:
@@ -179,7 +233,6 @@ class JobService:
     @classmethod
     def _to_response(cls, data: Dict[str, Any]) -> JobResponse:
         participants = [ParticipantRecord(**p) for p in data.get("participants", [])]
-        # Provide preview of participants (up to 50 for quick display)
         participants_preview = participants[:50]
 
         template_meta = (
@@ -191,6 +244,14 @@ class JobService:
         placement_data = (
             PlacementRegion(**data["placement"]) if data.get("placement") else None
         )
+        typography_data = (
+            TypographyConfig(**data["typography"]) if data.get("typography") else TypographyConfig()
+        )
+        batch_report = (
+            BatchTypographyReport(**data["batch_analysis"])
+            if data.get("batch_analysis")
+            else None
+        )
 
         return JobResponse(
             job_id=data["job_id"],
@@ -199,6 +260,8 @@ class JobService:
             template=template_meta,
             csv_summary=csv_meta,
             placement=placement_data,
+            typography=typography_data,
+            batch_analysis=batch_report,
             participants_preview=participants_preview,
             warnings=data.get("warnings", []),
             errors=data.get("errors", []),
