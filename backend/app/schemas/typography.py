@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from enum import Enum
+from app.schemas.placement import PlacementRegion
 
 
 class TextAlignment(str, Enum):
@@ -69,3 +70,20 @@ class BatchTypographyReport(BaseModel):
     widest_visual_width: float = 0.0
     participants_analysis: List[ParticipantTypographyAnalysis] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list)
+
+
+class LayoutCalculateRequest(BaseModel):
+    sample_text: Optional[str] = None
+    participant_row: Optional[int] = None
+    placement: Optional[PlacementRegion] = None
+    typography: Optional[TypographyConfig] = None
+
+
+class AutoFitResponse(BaseModel):
+    typography: TypographyConfig
+    batch_analysis: BatchTypographyReport
+    summary: str
+    optimal_size: int
+    all_fit: bool
+    overflow_count: int
+

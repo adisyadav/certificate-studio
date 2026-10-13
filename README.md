@@ -13,7 +13,7 @@ Certificate Studio is organized as a clean, decoupled monorepo:
 
 ---
 
-## Current Status: Milestone 4.2 (Complete Editor Stabilization & Intelligent Auto-Fit)
+## Current Status: Milestone 4.3 (One-Click Auto Fit and Infinite Loading Fix)
 
 ### Key Specifications & Architecture
 - **V1 Template Requirement**: V1 requires certificate templates with an **EMPTY/BLANK recipient-name area**. All placeholder-removal and cleanup mechanisms have been cleanly removed to eliminate unnecessary complexity.
@@ -21,24 +21,21 @@ Certificate Studio is organized as a clean, decoupled monorepo:
   - The certificate canvas is completely stationary. Zero vertical jumping, zero viewport collapse, zero reflow during participant switching or typography adjustments.
   - Image instance and canvas boundaries are preserved across font, size, color, and participant changes.
   - Asynchronous loading and layout calculation indicators are rendered as non-disruptive, fixed-height overlays.
-- **Intelligent Automatic Font Fitting**:
-  - Enabled by default for all participants.
-  - Deterministic binary-search font fitting finds the largest readable size that fits strictly within placement box width and height constraints.
-  - Automatically downsizes long names (e.g. from 64px to 38px) while rendering short names at preferred size.
-  - Never truncates or clips names, and never shrinks below the configured minimum readable size (`min_font_size`).
+- **Root-Cause Fix for Infinite Auto-Fitting**:
+  - **Decoupled In-Memory Layout**: Created `POST /api/jobs/{job_id}/layout/calculate` which calculates font fit on-the-fly using in-memory placement and typography parameters, removing the need to save to disk on every slider touch and breaking the parent re-render feedback loop.
+  - **AbortController Cancellation**: Stale requests are aborted immediately when a new user interaction occurs.
+  - **Request Timeout & Resilient Error Recovery**: 5-second timeout safeguard and user-facing retry button ensure the "Auto-fitting..." indicator never stalls indefinitely. Loading state is reliably cleared in `finally` blocks.
+- **One-Click "Auto Fit All Names"**:
+  - Prominent "Auto Fit All Names" button in the editor header and sidebar.
+  - Calculates optimal preferred font size across the entire CSV participant list without shrinking short names unnecessarily or clipping long names.
+  - Preserves placement coordinates, font family, color, and text alignment.
+  - Automatically updates job typography and generates an updated `BatchTypographyReport`.
 - **Typographic Baseline Consistency**:
   - Center alignment shares identical horizontal and vertical anchor positions across all names.
   - Font EM ascender/descender metric centering prevents ascenders or descenders (like 'y', 'g', 'j') from vertically displacing names.
-- **Lightweight Authoritative Layout API**:
-  - `GET /api/jobs/{job_id}/layout` computes fitted font size, bounding boxes, and fitting warnings without requiring full image rasterization.
 - **Session Persistence, New Project & Session Reset**:
   - Automatically recovers active job ID, uploaded template, participant CSV, placement coordinates, and typography preferences across browser refreshes.
   - Prominent "New Project" header action enables users to intentionally start a fresh project at any time.
-  - Confirms with the user before clearing workspace if files or placement exist.
-  - Generates a distinct backend job session, updates browser `localStorage`, resets view to Ingestion tab, and shows a fresh empty workspace.
-  - Preserves previous jobs and uploaded assets on the backend without deletion.
-  - Allows seamless replacement of certificate templates via "Upload different template".
-  - Safely ignores legacy cleanup fields in older job records without data corruption.
 
 ---
 

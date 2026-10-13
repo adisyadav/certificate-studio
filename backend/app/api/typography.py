@@ -6,7 +6,10 @@ from app.schemas.typography import (
     TypographyConfig,
     TypographyLayoutResult,
     BatchTypographyReport,
+    LayoutCalculateRequest,
+    AutoFitResponse,
 )
+
 from app.schemas.job import JobResponse
 from app.services.font_service import FontService, FontNotFoundError
 from app.services.job_service import JobService, JobNotFoundError
@@ -51,8 +54,7 @@ async def get_text_layout(
     sample_text: Optional[str] = Query(None, description="Optional custom preview text"),
 ) -> TypographyLayoutResult:
     """
-    Lightweight authoritative layout calculation.
-    Returns calculated font size, bounds, fitting status, and draw coordinates without full image rendering.
+    Lightweight authoritative layout calculation using saved job settings.
     """
     try:
         job = JobService.get_job(job_id)
@@ -86,6 +88,60 @@ async def get_text_layout(
         text=text_to_render,
         config=typography_config,
         placement=job.placement,
+        target_width=job.template.width,
+        target_height=job.template.height,
+    )
+    return layout
+
+
+@router.post("/jobs/{job_id}/layout/calculate", response_model=TypographyLayoutResult)
+async def calculate_text_layout_in_memory(
+    job_id: str,
+    payload: LayoutCalculateRequest,
+) -> TypographyLayoutResult:
+    """
+    Lightweight authoritative layout calculation with in-memory overrides.
+    Does not require saving placement or typography to disk first, eliminating feedback loops.
+    """
+    try:
+        job = JobService.get_job(job_id)
+    except JobNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job '{job_id}' not found.",
+        )
+
+    if not job.template:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Template is required to calculate layout.",
+        )
+
+    active_placement = payload.placement or job.placement
+    if not active_placement:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Placement region is required to calculate layout.",
+        )
+
+    active_typography = payload.typography or job.typography or TypographyConfig()
+
+    text_to_render = payload.sample_text
+    if not text_to_render and payload.participant_row is not None:
+        all_participants = JobService.get_all_participants(job_id)
+        match = next((p for p in all_participants if p.row_number == payload.participant_row), None)
+        if match and match.name:
+            text_to_render = match.name
+
+    if not text_to_render:
+        all_participants = JobService.get_all_participants(job_id)
+        first_valid = next((p for p in all_participants if p.is_valid and p.name), None)
+        text_to_render = first_valid.name if first_valid else "Jane Doe"
+
+    layout = TypographyService.calculate_layout(
+        text=text_to_render,
+        config=active_typography,
+        placement=active_placement,
         target_width=job.template.width,
         target_height=job.template.height,
     )
@@ -190,3 +246,93 @@ async def analyze_typography(job_id: str) -> BatchTypographyReport:
 
     JobService.save_batch_analysis(job_id, report)
     return report
+
+
+@router.post("/jobs/{job_id}/auto-fit", response_model=AutoFitResponse)
+async def auto_fit_typography(job_id: str) -> AutoFitResponse:
+    """
+    Intelligently auto-fits typography across all valid participants:
+    1. Preserves font_id, text_color, and alignment.
+    2. Calculates the optimal preferred_font_size ensuring short/standard names
+       are prominently readable while outlier names downscale safely.
+    3. Saves optimized typography to the job.
+    4. Automatically generates and stores an updated BatchTypographyReport.
+    5. Returns the updated configuration, batch report, and summary message.
+    """
+    try:
+        job = JobService.get_job(job_id)
+    except JobNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job '{job_id}' not found.",
+        )
+
+    if not job.template or not job.placement:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Both template and placement are required to auto-fit typography.",
+        )
+
+    participants = JobService.get_all_participants(job_id)
+    valid_names = [p.name.strip() for p in participants if p.is_valid and p.name.strip()]
+
+    current_config = job.typography or TypographyConfig()
+
+    # Determine optimal preferred font size
+    optimal_size = TypographyService.optimize_typography_for_batch(
+        names=valid_names if valid_names else ["Jane Doe"],
+        config=current_config,
+        placement=job.placement,
+        target_width=job.template.width,
+        target_height=job.template.height,
+    )
+
+    optimized_config = TypographyConfig(
+        font_id=current_config.font_id,
+        preferred_font_size=optimal_size,
+        min_font_size=current_config.min_font_size,
+        text_color=current_config.text_color,
+        alignment=current_config.alignment,
+    )
+
+    # Save to job
+    JobService.save_typography_config(job_id, optimized_config)
+
+    # Run batch analysis
+    report = BatchAnalysisService.analyze_participants(
+        participants=participants,
+        template_meta=job.template,
+        placement=job.placement,
+        config=optimized_config,
+    )
+    JobService.save_batch_analysis(job_id, report)
+
+    # Format user-facing summary
+    total = report.total_analyzed
+    overflows = report.overflow_count
+    reductions = report.reduction_count
+
+    if overflows > 0:
+        summary = (
+            f"Optimized font size to {optimal_size}px. Warning: {overflows} of {total} names still exceed "
+            f"the designated area at min font size ({optimized_config.min_font_size}px). Consider widening the placement box."
+        )
+    elif reductions > 0:
+        summary = (
+            f"Successfully auto-fitted all {total} names! Preferred size set to {optimal_size}px. "
+            f"{reductions} longer names will scale down gracefully."
+        )
+    else:
+        summary = (
+            f"Successfully auto-fitted all {total} names! Preferred size set to {optimal_size}px with zero overflows."
+        )
+
+    return AutoFitResponse(
+        typography=optimized_config,
+        batch_analysis=report,
+        summary=summary,
+        optimal_size=optimal_size,
+        all_fit=report.all_fit,
+        overflow_count=overflows,
+    )
+

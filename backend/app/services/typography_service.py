@@ -184,3 +184,85 @@ class TypographyService:
                 high = mid - 1
 
         return best_size, True
+
+    @classmethod
+    def optimize_typography_for_batch(
+        cls,
+        names: List[str],
+        config: TypographyConfig,
+        placement: PlacementRegion,
+        target_width: int,
+        target_height: int,
+        upper_bound_cap: int = 76,
+    ) -> int:
+        """
+        Determines the optimal preferred_font_size across all participants.
+
+        Optimization Policy:
+        1. Box boundary calculation with safe padding (4% horizontal & vertical).
+        2. Measures the maximum font size that fits for each valid participant.
+        3. If names is empty, returns config.preferred_font_size.
+        4. Calculates max_possible_size for the box (upper bounded by box height or upper_bound_cap).
+        5. Computes the maximum font size each name can support up to upper_bound_cap.
+        6. Strategy:
+           - We want short/standard names to be prominently readable and look great.
+           - We do not want an extreme outlier (e.g. 80 character name) to force all short names
+             down to tiny 18px text if the engine can automatically downscale outlier names individually!
+           - However, for standard distribution of names (e.g. up to 90th percentile), we find a preferred
+             font size that provides generous visual impact while minimizing how many names require reduction.
+           - Specifically:
+             - Check the size that fits 100% of participants. If that size >= 32px, that fits everyone cleanly without reduction!
+             - If the 100% size is very small (e.g. < 28px) because of a single ultra-long name, select the 75th-85th percentile
+               optimal size (clamped to at least 36px and at most upper_bound_cap) so standard names look beautiful,
+               while individual long names safely scale down via the per-participant layout engine.
+             - In all cases, the optimal size is clamped between config.min_font_size and upper_bound_cap.
+        """
+        valid_names = [n.strip() for n in names if n.strip()]
+        if not valid_names:
+            return config.preferred_font_size
+
+        region_w = placement.width * target_width
+        region_h = placement.height * target_height
+        pad_x = region_w * 0.04
+        pad_y = region_h * 0.04
+        safe_w = max(10.0, region_w - 2 * pad_x)
+        safe_h = max(10.0, region_h - 2 * pad_y)
+
+        # Theoretical maximum height limit
+        max_limit = min(upper_bound_cap, max(config.min_font_size + 4, int(safe_h * 0.95)))
+
+        # Find max fitting size for each name
+        fitting_sizes: List[int] = []
+        for name in valid_names:
+            fitted, _ = cls._fit_font_size(
+                text=name,
+                font_id=config.font_id,
+                min_size=config.min_font_size,
+                max_size=max_limit,
+                max_width=safe_w,
+                max_height=safe_h,
+            )
+            fitting_sizes.append(fitted)
+
+        fitting_sizes.sort()
+
+        min_fitted_all = fitting_sizes[0]
+        median_fitted = fitting_sizes[len(fitting_sizes) // 2]
+        p80_fitted = fitting_sizes[int(len(fitting_sizes) * 0.8)]
+
+        if min_fitted_all >= 34:
+            # Everyone fits comfortably at min_fitted_all!
+            optimal = min_fitted_all
+        elif min_fitted_all >= 28:
+            # Almost everyone fits; choose between min_fitted_all and p80
+            optimal = min(min_fitted_all, 48)
+        else:
+            # There are long outliers. Don't shrink normal names to < 28px.
+            # Pick a handsome preferred size (median or p80 capped around 48-56px),
+            # and let the per-participant engine scale down outliers.
+            optimal = min(max(median_fitted, 36), 56)
+
+        # Final safety bounds
+        optimal = max(config.min_font_size, min(optimal, max_limit))
+        return optimal
+

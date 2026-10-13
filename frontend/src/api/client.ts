@@ -65,6 +65,16 @@ export interface BatchTypographyReport {
   warnings: string[]
 }
 
+export interface AutoFitResponse {
+  typography: TypographyConfig
+  batch_analysis: BatchTypographyReport
+  summary: string
+  optimal_size: number
+  all_fit: boolean
+  overflow_count: number
+}
+
+
 export interface TemplateMetadata {
   filename: string
   format: string
@@ -278,8 +288,39 @@ export async function saveTypography(
 
 export async function fetchTextLayout(
   jobId: string,
-  params?: { participantRow?: number; sampleText?: string }
+  params?: {
+    participantRow?: number
+    sampleText?: string
+    placement?: PlacementRegion
+    typography?: TypographyConfig
+    signal?: AbortSignal
+  }
 ): Promise<TypographyLayoutResult> {
+  // If in-memory placement or typography are provided, use the POST /layout/calculate endpoint
+  if (params?.placement || params?.typography) {
+    const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/layout/calculate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        sample_text: params?.sampleText,
+        participant_row: params?.participantRow,
+        placement: params?.placement,
+        typography: params?.typography,
+      }),
+      signal: params?.signal,
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      throw new ApiError(errorData?.detail || `Failed to calculate layout (${response.status})`, response.status)
+    }
+
+    return response.json()
+  }
+
   const url = new URL(`${API_BASE_URL}/api/jobs/${jobId}/layout`)
   if (params?.participantRow) {
     url.searchParams.set('participant_row', String(params.participantRow))
@@ -290,11 +331,26 @@ export async function fetchTextLayout(
 
   const response = await fetch(url.toString(), {
     headers: { Accept: 'application/json' },
+    signal: params?.signal,
   })
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => null)
     throw new ApiError(errorData?.detail || `Failed to calculate layout (${response.status})`, response.status)
+  }
+
+  return response.json()
+}
+
+export async function autoFitAllNames(jobId: string): Promise<AutoFitResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/auto-fit`, {
+    method: 'POST',
+    headers: { Accept: 'application/json' },
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null)
+    throw new ApiError(errorData?.detail || `Failed to auto-fit typography (${response.status})`, response.status)
   }
 
   return response.json()

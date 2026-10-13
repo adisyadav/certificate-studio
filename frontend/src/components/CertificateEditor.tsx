@@ -23,6 +23,8 @@ import {
   BarChart3,
   RefreshCw,
   AlertTriangle,
+  Wand2,
+  Sparkles,
 } from 'lucide-react'
 import type {
   TemplateMetadata,
@@ -37,7 +39,9 @@ import {
   fetchFonts,
   analyzeTypography,
   fetchTextLayout,
+  autoFitAllNames,
 } from '../api/client'
+
 import {
   normalizedToCanvas,
   canvasToNormalized,
@@ -132,13 +136,19 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
   const [textFits, setTextFits] = useState<boolean>(true)
   const [layoutWarnings, setLayoutWarnings] = useState<string[]>([])
   const [isCalculatingLayout, setIsCalculatingLayout] = useState<boolean>(false)
+  const [layoutError, setLayoutError] = useState<string | null>(null)
   const layoutRequestIdRef = useRef<number>(0)
+  const activeAbortControllerRef = useRef<AbortController | null>(null)
 
-  // 7. Batch analysis state
+  // 7. Auto-Fit action state
+  const [isAutoFitting, setIsAutoFitting] = useState<boolean>(false)
+  const [autoFitSuccessSummary, setAutoFitSuccessSummary] = useState<string | null>(null)
+
+  // 8. Batch analysis state
   const [batchReport, setBatchReport] = useState<BatchTypographyReport | null>(savedBatchAnalysis)
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false)
 
-  // 8. Saving and status states
+  // 9. Saving and status states
   const [isSaving, setIsSaving] = useState<boolean>(false)
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -218,35 +228,64 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
     }
   }, [currentPlacement, stageSize])
 
-  // Debounced authoritative backend layout calculation
+  // Resilient debounced layout calculation using in-memory parameters and AbortController
   const requestAuthoritativeLayout = useCallback(() => {
     const currentReqId = ++layoutRequestIdRef.current
     setIsCalculatingLayout(true)
+    setLayoutError(null)
 
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current)
     }
 
     debounceTimerRef.current = setTimeout(async () => {
-      try {
-        // First sync placement and typography so backend calculate_layout uses current values
-        await onSavePlacement(currentPlacement)
-        await onSaveTypography(typography)
+      // Abort any prior in-flight request
+      if (activeAbortControllerRef.current) {
+        activeAbortControllerRef.current.abort()
+      }
 
-        const layout = await fetchTextLayout(jobId, { sampleText: selectedSample })
+      const controller = new AbortController()
+      activeAbortControllerRef.current = controller
+
+      // Request timeout: 5000ms
+      const timeoutId = setTimeout(() => {
+        controller.abort()
+      }, 5000)
+
+      try {
+        const layout = await fetchTextLayout(jobId, {
+          sampleText: selectedSample,
+          placement: currentPlacement,
+          typography: typography,
+          signal: controller.signal,
+        })
+
+        clearTimeout(timeoutId)
+
         if (currentReqId === layoutRequestIdRef.current) {
           setBackendFittedSize(layout.font_size)
           setTextFits(layout.fits)
           setLayoutWarnings(layout.warnings || [])
-          setIsCalculatingLayout(false)
+          setLayoutError(null)
         }
-      } catch {
+      } catch (err: unknown) {
+        clearTimeout(timeoutId)
+        if (err instanceof Error && err.name === 'AbortError') {
+          // Stale request aborted, safe to ignore unless it's the current request that timed out
+          if (currentReqId === layoutRequestIdRef.current) {
+            setLayoutError('Layout calculation timed out. Click to retry.')
+          }
+        } else if (currentReqId === layoutRequestIdRef.current) {
+          setLayoutError('Failed to calculate layout.')
+        }
+      } finally {
         if (currentReqId === layoutRequestIdRef.current) {
           setIsCalculatingLayout(false)
         }
       }
-    }, 250)
-  }, [jobId, currentPlacement, typography, selectedSample, onSavePlacement, onSaveTypography])
+    }, 200)
+  }, [jobId, currentPlacement, typography, selectedSample])
+
 
   // Trigger debounced layout when typography, participant, or placement changes
   useEffect(() => {
@@ -391,7 +430,39 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
     setHasUnsavedPlacement(false)
     setHasUnsavedTypography(false)
     setSaveSuccess(false)
+    setAutoFitSuccessSummary(null)
   }
+
+  // One-Click Auto Fit All Names Action
+  const handleAutoFitAllNames = async () => {
+    setIsAutoFitting(true)
+    setErrorMessage(null)
+    setAutoFitSuccessSummary(null)
+
+    try {
+      // First ensure current placement is saved to backend so auto-fit calculates with active bounds
+      await onSavePlacement(currentPlacement)
+      setHasUnsavedPlacement(false)
+
+      const result = await autoFitAllNames(jobId)
+
+      // Apply optimized typography to local state
+      setTypography(result.typography)
+      setBatchReport(result.batch_analysis)
+      setAutoFitSuccessSummary(result.summary)
+      setHasUnsavedTypography(false)
+      setSaveSuccess(true)
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setErrorMessage(err.message)
+      } else {
+        setErrorMessage('Failed to auto-fit typography.')
+      }
+    } finally {
+      setIsAutoFitting(false)
+    }
+  }
+
 
   // Trigger batch analysis
   const handleRunBatchAnalysis = async () => {
@@ -470,6 +541,21 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
 
           <button
             type="button"
+            onClick={handleAutoFitAllNames}
+            disabled={isAutoFitting || isSaving}
+            className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50"
+            title="Automatically determine optimal font size across all CSV participants"
+          >
+            {isAutoFitting ? (
+              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="h-3.5 w-3.5 text-amber-300" />
+            )}
+            <span>{isAutoFitting ? 'Auto-fitting all...' : 'Auto Fit All Names'}</span>
+          </button>
+
+          <button
+            type="button"
             onClick={handleReset}
             className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 text-xs font-medium hover:bg-slate-50 transition-colors flex items-center gap-1.5"
             title="Reset to saved settings"
@@ -482,7 +568,7 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
             type="button"
             onClick={handleSaveAll}
             disabled={isSaving}
-            className="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium shadow-sm transition-colors flex items-center gap-1.5 disabled:opacity-50"
+            className="px-4 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium shadow-sm transition-colors flex items-center gap-1.5 disabled:opacity-50"
           >
             <Save className="h-3.5 w-3.5" />
             <span>{isSaving ? 'Saving...' : 'Save Configuration'}</span>
@@ -494,7 +580,7 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
             disabled={!canContinue}
             className={`px-4 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors ${
               canContinue
-                ? 'bg-slate-900 hover:bg-slate-800 text-white shadow-sm'
+                ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm'
                 : 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
             }`}
           >
@@ -504,12 +590,29 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
         </div>
       </div>
 
+      {autoFitSuccessSummary && (
+        <div className="p-3 rounded-lg bg-indigo-50/80 border border-indigo-200 text-indigo-900 text-xs flex items-center justify-between gap-2 animate-fadeIn">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 shrink-0 text-indigo-600" />
+            <span className="font-medium">{autoFitSuccessSummary}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setAutoFitSuccessSummary(null)}
+            className="text-indigo-400 hover:text-indigo-700 text-xs px-1"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {errorMessage && (
         <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
           <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
           <span>{errorMessage}</span>
         </div>
       )}
+
 
       {/* Editor Grid: Left 3 cols (Stationary Viewport) | Right 1 col (Controls) */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -528,13 +631,25 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
                 <span>Recipient Name Placement Area</span>
               </span>
 
-              {isCalculatingLayout && (
+              {isCalculatingLayout ? (
                 <span className="inline-flex items-center gap-1 text-[11px] text-indigo-600 font-medium">
                   <RefreshCw className="h-3 w-3 animate-spin" />
                   <span>Auto-fitting...</span>
                 </span>
-              )}
+              ) : layoutError ? (
+                <button
+                  type="button"
+                  onClick={requestAuthoritativeLayout}
+                  className="inline-flex items-center gap-1 text-[11px] text-rose-600 hover:text-rose-800 font-medium bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200"
+                  title="Click to retry layout calculation"
+                >
+                  <AlertCircle className="h-3 w-3 text-rose-600" />
+                  <span>{layoutError}</span>
+                  <RefreshCw className="h-2.5 w-2.5 ml-0.5" />
+                </button>
+              ) : null}
             </div>
+
 
             <div className="flex items-center gap-2 text-[11px]">
               {backendFittedSize && (
@@ -952,16 +1067,45 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
                     ))}
                   </div>
                 )}
+
+                <button
+                  type="button"
+                  onClick={handleAutoFitAllNames}
+                  disabled={isAutoFitting || isSaving}
+                  className="w-full py-2 px-3 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors border border-indigo-200 disabled:opacity-50"
+                >
+                  {isAutoFitting ? (
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Wand2 className="h-3.5 w-3.5 text-indigo-600" />
+                  )}
+                  <span>Auto Fit All Names to Box</span>
+                </button>
               </div>
             ) : (
-              <p className="text-[11px] text-slate-500 leading-relaxed">
-                Click <strong>Analyze</strong> to verify that every participant name in your CSV fits
-                comfortably without exceeding boundaries.
-              </p>
+              <div className="space-y-3">
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Analyze checks all CSV names against current bounds. Use <strong>Auto Fit All Names</strong> to automatically compute and apply the optimal font size.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleAutoFitAllNames}
+                  disabled={isAutoFitting || isSaving}
+                  className="w-full py-2 px-3 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors border border-indigo-200 disabled:opacity-50"
+                >
+                  {isAutoFitting ? (
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Wand2 className="h-3.5 w-3.5 text-indigo-600" />
+                  )}
+                  <span>Auto Fit All Names to Box</span>
+                </button>
+              </div>
             )}
           </div>
         </div>
       </div>
     </div>
+
   )
 }
