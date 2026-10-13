@@ -70,6 +70,8 @@ class BatchTypographyReport(BaseModel):
     widest_visual_width: float = 0.0
     participants_analysis: List[ParticipantTypographyAnalysis] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list)
+    config_fingerprint: Optional[str] = None
+
 
 
 class LayoutCalculateRequest(BaseModel):

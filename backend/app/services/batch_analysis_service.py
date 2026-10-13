@@ -1,3 +1,5 @@
+import hashlib
+import json
 from typing import List, Optional
 from app.schemas.job import ParticipantRecord, TemplateMetadata
 from app.schemas.placement import PlacementRegion
@@ -12,6 +14,36 @@ from app.services.typography_service import TypographyService
 
 class BatchAnalysisService:
     @classmethod
+    def compute_fingerprint(
+        cls,
+        template_meta: TemplateMetadata,
+        placement: PlacementRegion,
+        config: TypographyConfig,
+        participant_count: int,
+    ) -> str:
+        """
+        Creates a deterministic hash representing the exact certificate configuration.
+        Any change to template dimensions, placement box, font family, font size,
+        color, alignment, or participant count alters this fingerprint.
+        """
+        data = {
+            "template_w": template_meta.width,
+            "template_h": template_meta.height,
+            "placement_x": round(placement.x, 4),
+            "placement_y": round(placement.y, 4),
+            "placement_w": round(placement.width, 4),
+            "placement_h": round(placement.height, 4),
+            "font_id": config.font_id,
+            "preferred_size": config.preferred_font_size,
+            "min_size": config.min_font_size,
+            "text_color": config.text_color.lower(),
+            "alignment": config.alignment.value,
+            "participant_count": participant_count,
+        }
+        encoded = json.dumps(data, sort_keys=True).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()[:16]
+
+    @classmethod
     def analyze_participants(
         cls,
         participants: List[ParticipantRecord],
@@ -23,6 +55,13 @@ class BatchAnalysisService:
         target_height = template_meta.height
 
         valid_participants = [p for p in participants if p.is_valid and p.name.strip()]
+        fingerprint = cls.compute_fingerprint(
+            template_meta=template_meta,
+            placement=placement,
+            config=config,
+            participant_count=len(valid_participants),
+        )
+
         if not valid_participants:
             return BatchTypographyReport(
                 total_analyzed=0,
@@ -31,7 +70,9 @@ class BatchAnalysisService:
                 reduction_count=0,
                 unsupported_glyph_count=0,
                 warnings=["No valid participants to analyze."],
+                config_fingerprint=fingerprint,
             )
+
 
         analyses: List[ParticipantTypographyAnalysis] = []
         overflow_count = 0
@@ -127,4 +168,6 @@ class BatchAnalysisService:
             widest_visual_width=round(widest_visual_width, 1),
             participants_analysis=analyses,
             warnings=warnings,
+            config_fingerprint=fingerprint,
         )
+

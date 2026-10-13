@@ -148,10 +148,20 @@ export const App: React.FC = () => {
     initApp()
   }, [initApp])
 
-  const handleTabChange = (tab: AppTab) => {
+  const handleTabChange = async (tab: AppTab) => {
     setActiveTab(tab)
     setStoredActiveTab(tab)
+    // When navigating to export, refresh job state to guarantee up-to-date analysis and placement
+    if (tab === 'export' && currentJob) {
+      try {
+        const freshJob = await getJob(currentJob.job_id)
+        setCurrentJob(freshJob)
+      } catch {
+        // If refresh fails, continue with currentJob
+      }
+    }
   }
+
 
   const handleNewProject = async () => {
     // Check if the current job has any uploaded files or configured settings
@@ -633,16 +643,31 @@ export const App: React.FC = () => {
               participants={currentJob.participants_preview}
               onSavePlacement={handleSavePlacement}
               onSaveTypography={handleSaveTypography}
+              onBatchAnalysisUpdated={(report, typography) => {
+                setCurrentJob((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        batch_analysis: report,
+                        typography: typography || prev.typography,
+                      }
+                    : null
+                )
+              }}
               onBackToUpload={() => handleTabChange('upload')}
-              onContinue={() => handleTabChange('export')}
+              onContinue={async () => {
+                await handleTabChange('export')
+              }}
               canContinue={canContinueToGeneration}
             />
           ) : activeTab === 'export' && currentJob ? (
             <ExportWorkspace
               job={currentJob}
               onBackToEditor={() => handleTabChange('editor')}
+              onJobUpdated={(updated) => setCurrentJob(updated)}
             />
           ) : null}
+
         </div>
 
 

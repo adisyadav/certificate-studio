@@ -14,6 +14,7 @@ import {
 import type {
   JobResponse,
   ExportJobResponse,
+  BatchTypographyReport,
 } from '../api/client'
 
 import {
@@ -21,36 +22,82 @@ import {
   getExportStatus,
   getExportDownloadUrl,
   getTemplatePreviewUrl,
+  analyzeTypography,
   ApiError,
 } from '../api/client'
 
 interface ExportWorkspaceProps {
   job: JobResponse
   onBackToEditor: () => void
+  onJobUpdated?: (updated: JobResponse) => void
 }
 
 export const ExportWorkspace: React.FC<ExportWorkspaceProps> = ({
   job,
   onBackToEditor,
+  onJobUpdated,
 }) => {
+
   const [activeExport, setActiveExport] = useState<ExportJobResponse | null>(null)
   const [isStarting, setIsStarting] = useState<boolean>(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [isValidating, setIsValidating] = useState<boolean>(false)
+  const [latestReport, setLatestReport] = useState<BatchTypographyReport | null>(
+    job.batch_analysis
+  )
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const template = job.template
   const typography = job.typography
   const placement = job.placement
   const csvSummary = job.csv_summary
-  const batchAnalysis = job.batch_analysis
 
   const totalValid = csvSummary?.valid_count || 0
   const totalInvalid = csvSummary?.invalid_count || 0
 
   const hasPlacement = !!placement
   const hasTypography = !!typography
-  const allFit = batchAnalysis?.all_fit ?? false
-  const hasAnalysis = !!batchAnalysis
+
+  // Update latestReport when job.batch_analysis changes
+  useEffect(() => {
+    if (job.batch_analysis) {
+      setLatestReport(job.batch_analysis)
+    }
+  }, [job.batch_analysis])
+
+  // Self-sufficient Pre-Flight Validation function
+  const runPreFlightValidation = async () => {
+    if (!hasPlacement || !hasTypography || totalValid === 0) return
+    setIsValidating(true)
+    setErrorMessage(null)
+
+    try {
+      const report = await analyzeTypography(job.job_id)
+      setLatestReport(report)
+      onJobUpdated?.({
+        ...job,
+        batch_analysis: report,
+      })
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setErrorMessage(`Readiness check failed: ${err.message}`)
+      } else {
+        setErrorMessage('Readiness check failed.')
+      }
+    } finally {
+      setIsValidating(false)
+    }
+  }
+
+  // Automatically run pre-flight readiness check if analysis is missing or stale
+  useEffect(() => {
+    if (!latestReport && hasPlacement && hasTypography && totalValid > 0 && !isValidating) {
+      runPreFlightValidation()
+    }
+  }, [job.job_id, latestReport, hasPlacement, hasTypography, totalValid])
+
+  const allFit = latestReport?.all_fit ?? false
+  const hasAnalysis = !!latestReport
 
   // Can start only if template, placement, typography, and clean validation exist
   const canStartExport =
@@ -59,8 +106,10 @@ export const ExportWorkspace: React.FC<ExportWorkspaceProps> = ({
     totalValid > 0 &&
     hasAnalysis &&
     allFit &&
+    !isValidating &&
     !isStarting &&
     (!activeExport || activeExport.status === 'completed' || activeExport.status === 'failed')
+
 
   // Poll active export status
   useEffect(() => {
@@ -244,24 +293,71 @@ export const ExportWorkspace: React.FC<ExportWorkspaceProps> = ({
               </div>
             )}
 
-            {/* Validation Notice if not analyzed */}
-            {!hasAnalysis && (
-              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center gap-2.5">
-                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
-                <span>
-                  Please run <strong>Analyze</strong> or <strong>Auto Fit All Names</strong> in the editor before generating to ensure all participants fit cleanly.
-                </span>
+            {/* Readiness and Validation States */}
+            {isValidating && (
+              <div className="p-3.5 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs flex items-center justify-between gap-2.5">
+                <div className="flex items-center gap-2.5">
+                  <RefreshCw className="h-4 w-4 animate-spin text-indigo-600 shrink-0" />
+                  <span>Checking certificate readiness and verifying all participant layouts...</span>
+                </div>
               </div>
             )}
 
-            {hasAnalysis && !allFit && (
-              <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2.5">
-                <AlertTriangle className="h-4 w-4 shrink-0 text-rose-600" />
-                <span>
-                  Warning: <strong>{batchAnalysis?.overflow_count}</strong> names exceed the placement area at minimum font size. Enlarge the placement rectangle before export.
-                </span>
+            {!isValidating && !hasAnalysis && (
+              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center justify-between gap-2.5">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+                  <span>Certificate configuration has not been validated yet.</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={runPreFlightValidation}
+                  className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded font-medium text-[11px]"
+                >
+                  Run Readiness Check
+                </button>
               </div>
             )}
+
+            {!isValidating && hasAnalysis && allFit && (
+              <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between gap-2.5">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                  <span>
+                    Ready to generate! All <strong>{latestReport?.total_analyzed}</strong> participants fit safely without boundary overflows.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={runPreFlightValidation}
+                  className="text-emerald-700 hover:text-emerald-900 underline text-[11px]"
+                >
+                  Re-check
+                </button>
+              </div>
+            )}
+
+            {!isValidating && hasAnalysis && !allFit && (
+              <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center justify-between gap-2.5">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-rose-600" />
+                  <div>
+                    <span className="font-semibold block">Validation Failed</span>
+                    <span>
+                      {latestReport?.overflow_count || 0} participant name(s) cannot fit within the designated placement area even at minimum font size ({typography?.min_font_size}px).
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={onBackToEditor}
+                  className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded font-medium text-[11px] shrink-0"
+                >
+                  Adjust in Editor
+                </button>
+              </div>
+            )}
+
 
             {/* Action Buttons */}
             <div className="flex flex-wrap items-center gap-3 pt-2">
@@ -415,12 +511,13 @@ export const ExportWorkspace: React.FC<ExportWorkspaceProps> = ({
                   <span className="text-rose-600 font-mono">{totalInvalid}</span>
                 </div>
               )}
-              {batchAnalysis && (
+              {latestReport && (
                 <div className="flex justify-between">
                   <span className="text-slate-500">Dynamically Resized:</span>
-                  <span className="text-indigo-600 font-mono">{batchAnalysis.reduction_count}</span>
+                  <span className="text-indigo-600 font-mono">{latestReport.reduction_count}</span>
                 </div>
               )}
+
             </div>
           </div>
         </div>

@@ -13,9 +13,24 @@ Certificate Studio is organized as a clean, decoupled monorepo:
 
 ---
 
-## Current Status: Milestone 5 (Production-Quality Batch PDF Generation & ZIP Export)
+## Current Status: Milestone 5.1 (Export Validation & Dynamic Pre-Flight Readiness Fix)
 
 ### Key Specifications & Architecture
+- **Reliable Validation Contract & Configuration Fingerprints**:
+  - Deterministic 16-character SHA-256 fingerprint generated from template dimensions, placement box coordinates, font ID, sizes, color, alignment, and participant counts.
+  - Attached to all `BatchTypographyReport` objects on `/analyze-typography` and `/auto-fit`.
+  - Non-destructive save operations: saving identical placement or typography settings retains existing valid analysis results rather than blindly setting them to `null`.
+- **Self-Sufficient Pre-Flight Readiness in Export Workspace**:
+  - Automatically checks readiness and verifies all participant layouts upon entering Step 3 (Generate & Download) if analysis is missing or stale.
+  - Eliminates the confusing requirement for users to manually click Analyze as an arbitrary prerequisite.
+  - Shows clear, actionable statuses:
+    - **Checking certificate readiness...** (with progress indicator)
+    - **Ready to generate!** (enables the Generate Certificates button)
+    - **Validation Failed** (displays specific overflow counts with one-click "Adjust in Editor")
+    - **Connection Error / Retry** (actionable retry buttons)
+- **Editor-to-Export Synchronization**:
+  - Immediate state synchronization between `CertificateEditor` and `App.tsx` via `onBatchAnalysisUpdated`.
+  - Fresh job state retrieval on tab transition ensures zero stale React closures or props.
 - **Three-Step Production Workflow**:
   1. **Ingestion**: Template validation (PNG, JPG, single-page PDF) and participant CSV parsing with automatic name-column detection.
   2. **Visual Editor**: Interactive single-box placement, 5 bundled fonts, live font fitting, baseline centering, and one-click "Auto Fit All Names".
@@ -24,20 +39,12 @@ Certificate Studio is organized as a clean, decoupled monorepo:
   - Reuses the authoritative layout engine (`TypographyService.calculate_layout()`) for final PDF generation.
   - Ensures 100% visual consistency between on-screen previews and exported PDFs.
   - Individually calculates the optimal font size for every participant name; never reuses the size from the last editor preview.
-- **Single-Page PDF Generation (`PDFService`)**:
-  - **Raster Templates (PNG/JPG)**: Renders full-resolution image with exact Pillow text coordinates and exports to PDF with verified page bounds and resolution.
-  - **Vector PDF Templates**: Preserves original PDF page dimensions, vector lines, and text using PyMuPDF transparent overlays.
-  - Strictly verifies every generated PDF (opens with PyMuPDF, verifies exactly 1 page, confirms non-empty content and valid dimensions).
-- **Safe Filename Generation (`FilenameGenerator`)**:
-  - Sanitizes participant names into clean, OS-compliant filenames across macOS, Windows, and Linux.
-  - Prevents path traversal and removes unsafe characters.
-  - Resolves duplicate participant names deterministically (e.g. `Aarav Sharma.pdf`, `Aarav Sharma (2).pdf`).
-- **Atomic ZIP Archive Packaging (`ZipService`)**:
-  - Packages verified PDFs and a machine-readable `generation_report.json` into `certificates.zip`.
-  - Verifies ZIP integrity before publication.
-- **Session Persistence & Safety**:
-  - Maintains active session state across all 3 steps on page reload.
-  - Prohibits export if any participants have blocking overflow errors.
+- **Single-Page PDF Generation (`PDFService`) & Atomic ZIP Export (`ZipService`)**:
+  - High-resolution raster (PNG/JPG) and vector PDF template overlays.
+  - PyMuPDF structural and page-dimension validation on every certificate.
+  - Unique, sanitized filenames with duplicate handling (e.g., `Aarav Sharma.pdf`, `Aarav Sharma (2).pdf`).
+  - Machine-readable `generation_report.json` included in `certificates.zip`.
+
 
 
 ---

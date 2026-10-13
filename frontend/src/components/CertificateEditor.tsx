@@ -67,6 +67,7 @@ interface CertificateEditorProps {
   participants: ParticipantRecord[]
   onSavePlacement: (placement: PlacementRegion) => Promise<void>
   onSaveTypography: (config: TypographyConfig) => Promise<void>
+  onBatchAnalysisUpdated?: (report: BatchTypographyReport, typography?: TypographyConfig) => void
   onBackToUpload: () => void
   onContinue: () => void
   canContinue: boolean
@@ -81,10 +82,12 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
   participants,
   onSavePlacement,
   onSaveTypography,
+  onBatchAnalysisUpdated,
   onBackToUpload,
   onContinue,
   canContinue,
 }) => {
+
   const containerRef = useRef<HTMLDivElement>(null)
   const rectRef = useRef<Konva.Rect>(null)
   const trRef = useRef<Konva.Transformer>(null)
@@ -452,6 +455,7 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
       setAutoFitSuccessSummary(result.summary)
       setHasUnsavedTypography(false)
       setSaveSuccess(true)
+      onBatchAnalysisUpdated?.(result.batch_analysis, result.typography)
     } catch (err: unknown) {
       if (err instanceof Error) {
         setErrorMessage(err.message)
@@ -476,7 +480,9 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
 
       const report = await analyzeTypography(jobId)
       setBatchReport(report)
+      onBatchAnalysisUpdated?.(report, typography)
     } catch (err: unknown) {
+
       if (err instanceof Error) {
         setErrorMessage(err.message)
       } else {

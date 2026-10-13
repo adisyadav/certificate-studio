@@ -63,7 +63,9 @@ export interface BatchTypographyReport {
   widest_visual_width: number
   participants_analysis: ParticipantTypographyAnalysis[]
   warnings: string[]
+  config_fingerprint?: string | null
 }
+
 
 export interface AutoFitResponse {
   typography: TypographyConfig

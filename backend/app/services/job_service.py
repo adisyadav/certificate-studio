@@ -149,12 +149,15 @@ class JobService:
             raise JobNotFoundError(f"Job {job_id} not found.")
 
         data = json.loads(meta_file.read_text(encoding="utf-8"))
+        prev_placement = data.get("placement")
         data["placement"] = placement.model_dump()
-        data["batch_analysis"] = None
+
+        # If placement actually changed, invalidate previous batch analysis
+        if prev_placement != data["placement"]:
+            data["batch_analysis"] = None
 
         cls._save_atomic(job_dir, data)
         return cls._to_response(data)
-
 
     @classmethod
     def save_typography_config(
@@ -166,11 +169,16 @@ class JobService:
             raise JobNotFoundError(f"Job {job_id} not found.")
 
         data = json.loads(meta_file.read_text(encoding="utf-8"))
+        prev_typo = data.get("typography")
         data["typography"] = config.model_dump()
-        data["batch_analysis"] = None
+
+        # If typography actually changed, invalidate previous batch analysis
+        if prev_typo != data["typography"]:
+            data["batch_analysis"] = None
 
         cls._save_atomic(job_dir, data)
         return cls._to_response(data)
+
 
     @classmethod
     def save_batch_analysis(
