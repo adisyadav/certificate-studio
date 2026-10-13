@@ -13,6 +13,7 @@ from app.schemas.job import (
     CsvSummary,
     ParticipantRecord,
 )
+from app.schemas.placement import PlacementRegion
 
 
 class JobNotFoundError(Exception):
@@ -53,6 +54,7 @@ class JobService:
             "status": JobStatus.CREATED.value,
             "template": None,
             "csv_summary": None,
+            "placement": None,
             "participants": [],
             "warnings": [],
             "errors": [],
@@ -82,6 +84,9 @@ class JobService:
 
         data = json.loads(meta_file.read_text(encoding="utf-8"))
         data["template"] = template.model_dump()
+
+        # Invalidate previous placement when template changes
+        data["placement"] = None
 
         # Update status
         if data.get("csv_summary"):
@@ -119,6 +124,26 @@ class JobService:
 
         cls._save_atomic(job_dir, data)
         return cls._to_response(data)
+
+    @classmethod
+    def save_placement(
+        cls, job_id: str, placement: PlacementRegion
+    ) -> JobResponse:
+        job_dir = cls.get_job_dir(job_id)
+        meta_file = job_dir / "job.json"
+        if not meta_file.exists():
+            raise JobNotFoundError(f"Job {job_id} not found.")
+
+        data = json.loads(meta_file.read_text(encoding="utf-8"))
+        data["placement"] = placement.model_dump()
+
+        cls._save_atomic(job_dir, data)
+        return cls._to_response(data)
+
+    @classmethod
+    def get_placement(cls, job_id: str) -> Optional[PlacementRegion]:
+        job = cls.get_job(job_id)
+        return job.placement
 
     @classmethod
     def get_raw_csv_bytes(cls, job_id: str) -> bytes:
@@ -163,6 +188,9 @@ class JobService:
         csv_meta = (
             CsvSummary(**data["csv_summary"]) if data.get("csv_summary") else None
         )
+        placement_data = (
+            PlacementRegion(**data["placement"]) if data.get("placement") else None
+        )
 
         return JobResponse(
             job_id=data["job_id"],
@@ -170,6 +198,7 @@ class JobService:
             status=JobStatus(data["status"]),
             template=template_meta,
             csv_summary=csv_meta,
+            placement=placement_data,
             participants_preview=participants_preview,
             warnings=data.get("warnings", []),
             errors=data.get("errors", []),

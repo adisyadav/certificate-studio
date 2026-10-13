@@ -40,12 +40,20 @@ export interface CsvSummary {
   errors: string[]
 }
 
+export interface PlacementRegion {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
 export interface JobResponse {
   job_id: string
   created_at: string
   status: JobStatus
   template: TemplateMetadata | null
   csv_summary: CsvSummary | null
+  placement: PlacementRegion | null
   participants_preview: ParticipantRecord[]
   warnings: string[]
   errors: string[]
@@ -142,6 +150,41 @@ export async function selectNameColumn(jobId: string, columnName: string): Promi
   }
 
   return response.json()
+}
+
+export async function savePlacement(
+  jobId: string,
+  placement: PlacementRegion
+): Promise<JobResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/placement`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({ placement }),
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null)
+    throw new Error(errorData?.detail || `Failed to save placement (${response.status})`)
+  }
+
+  return response.json()
+}
+
+export async function getPlacement(jobId: string): Promise<PlacementRegion | null> {
+  const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/placement`, {
+    headers: { Accept: 'application/json' },
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null)
+    throw new Error(errorData?.detail || `Failed to get placement (${response.status})`)
+  }
+
+  const data = await response.json()
+  return data.placement
 }
 
 export function getTemplatePreviewUrl(relativeUrl: string): string {

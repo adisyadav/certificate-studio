@@ -8,37 +8,40 @@ A local-first, privacy-respecting web application for bulk generating personaliz
 
 Certificate Studio is organized as a clean, decoupled monorepo:
 
-- **`backend/`**: Python FastAPI service providing API endpoints, file ingestion (Pillow, PyMuPDF), CSV parsing, atomic job storage, and PDF layout processing.
+- **`backend/`**: Python FastAPI service providing API endpoints, file ingestion (Pillow, PyMuPDF), CSV parsing, normalized placement validation, and atomic job storage.
 - **`frontend/`**: React 19 application built with TypeScript, Vite, Tailwind CSS, and React Konva for visual coordinate placement.
 
 ---
 
-## Current Status: Milestone 2 (File Upload and CSV Processing)
+## Current Status: Milestone 3 (Interactive Certificate Editor)
 
 ### Features Implemented
-1. **Template Ingestion**:
-   - Accepts PNG, JPG / JPEG, and single-page PDF certificate templates.
-   - Rejects encrypted, corrupted, or multipage PDFs with clear error feedback.
-   - Decompression-bomb protection via Pillow pixel thresholds.
-   - Extracts exact width, height, aspect ratio, and orientation (landscape, portrait, square).
-   - Generates browser-compatible PNG preview images while preserving the original template untouched.
-2. **CSV Processing**:
-   - Supports UTF-8 and UTF-8-BOM encoded CSVs.
-   - Detects common participant name headers (`name`, `full_name`, `Participant`, `Student Name`, etc.).
-   - Preserves additional CSV columns without discarding them.
-   - Interactive column selection fallback when headers are ambiguous.
-   - Preserves original name capitalization and 1-based CSV row numbers.
-   - Identifies duplicate participant names without discarding them.
-   - Explicitly flags blank rows or missing names.
-3. **Local Job Management**:
-   - Isolated job sessions stored inside `storage/jobs/{job_id}/`.
-   - Atomic metadata persistence (`job.json`).
-   - Safe preview endpoints protected against directory traversal.
-4. **Interactive Upload Workspace**:
-   - Drag-and-drop file uploaders with fallback file pickers and keyboard accessibility.
-   - Live certificate image preview with format and dimension metrics.
-   - Participant preview table with validation badges (valid, duplicate, missing name).
-   - Instant file replacement without requiring application restarts.
+1. **Interactive Visual Placement Editor (React Konva)**:
+   - Visual certificate canvas preserving original template aspect ratio (landscape, portrait, and square).
+   - Allows users to drag-and-drop or click-and-drag to select the recipient-name bounding box.
+   - Resize handles with boundary-constrained transformation.
+   - Non-draggable certificate background preventing accidental displacement.
+   - Keyboard accessibility: Arrow keys nudge placement, Shift+Arrow expands step size.
+   - Live sample text positioning preview with instant toggle between Short name ("Jane Doe"), Long name ("Dr. Alexander Montgomery-Cunningham III"), and actual CSV participants.
+2. **Normalized Coordinate System**:
+   - Stores coordinates strictly normalized between `0.0` and `1.0`:
+     ```json
+     {
+       "x": 0.25,
+       "y": 0.45,
+       "width": 0.50,
+       "height": 0.12
+     }
+     ```
+   - Immune to browser window resizing, display scaling, and high-DPI screens.
+3. **Placement API & Atomic Persistence**:
+   - `POST /api/jobs/{job_id}/placement`: Validates boundaries (`x + width <= 1.0`, `y + height <= 1.0`, `width > 0`, `height > 0`).
+   - `GET /api/jobs/{job_id}/placement`: Retrieves saved placement.
+   - Atomic persistence inside `storage/jobs/{job_id}/job.json`.
+   - **Template Replacement Invalidation**: Uploading a new template automatically clears previous placement to prevent mismatched layout coordinates.
+4. **Ingestion & Processing (from Milestones 1 & 2)**:
+   - High-fidelity template ingestion (PNG, JPG, single-page PDF) with PyMuPDF and Pillow.
+   - CSV parsing with UTF-8 / UTF-8-BOM support, candidate name column detection, duplicate tracking, and blank row validation.
 
 ---
 
@@ -116,21 +119,25 @@ The application will be accessible at:
 
 ---
 
-## Verifying Milestone 2
+## Verifying Milestone 3 Manually
 
 1. Start both the backend (`http://localhost:8000`) and frontend (`http://localhost:5173`).
-2. Visit `http://localhost:5173` in your browser.
-3. **Test Template Upload**:
-   - Drag-and-drop or select a PNG, JPG, or single-page PDF certificate.
-   - Confirm that the visual preview renders with exact dimensions, format, and orientation badge.
-   - Test uploading a different template to verify seamless replacement.
-4. **Test CSV Upload**:
-   - Drag-and-drop or select a CSV containing participant names (e.g. `Participant,Email` or `Full Name,Role`).
-   - Observe the participant statistics (Total, Valid, Duplicates, Invalid) and the preview table.
-   - Use the dropdown to select a different name column and observe the preview table update instantly.
-5. **Run the Automated Test Suite**:
+2. Open `http://localhost:5173` in your browser.
+3. In **Step 1 (Ingestion)**:
+   - Upload a certificate template (PNG, JPG, or PDF) and a participant CSV.
+4. Click **"Open Visual Editor"** or switch to the **"2. Visual Editor"** tab:
+   - Observe the certificate canvas rendered with the correct aspect ratio.
+   - Click and drag or use the resize handles on the bounding box to reposition the name area.
+   - Use the sample text radio buttons to toggle between **Short Name**, **Long Name**, and **CSV Participant**.
+   - Use Arrow keys on your keyboard to test fine-tuned keyboard adjustments.
+   - Click **Save Placement** and verify the "Placement Saved" indicator appears.
+5. **Persistence & Resilience**:
+   - Refresh the browser page (`Cmd + R`); observe that the saved placement restores automatically.
+   - Resize your browser window; observe that the placement box and certificate remain aligned without drift.
+   - Return to Ingestion, upload a new template, and verify that previous placement is cleared.
+6. **Run Automated Tests**:
    ```bash
    cd backend
-   venv/bin/pytest
+   venv/bin/pytest -v
    ```
-   All 17 tests (Milestone 1 health + Milestone 2 upload & validation cases) will pass.
+   All 23 unit & integration tests will pass.

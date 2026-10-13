@@ -6,6 +6,11 @@ from app.schemas.job import (
     JobResponse,
     SelectNameColumnRequest,
 )
+from app.schemas.placement import (
+    PlacementRegion,
+    SavePlacementRequest,
+    PlacementResponse,
+)
 from app.services.job_service import JobService, JobNotFoundError
 from app.services.template_service import (
     TemplateService,
@@ -155,6 +160,42 @@ async def select_name_column(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
+        )
+
+
+@router.post("/{job_id}/placement", response_model=JobResponse)
+async def save_placement(
+    job_id: str,
+    request: SavePlacementRequest,
+) -> JobResponse:
+    """Save normalized placement region for participant name."""
+    try:
+        job = JobService.get_job(job_id)
+    except JobNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job '{job_id}' not found.",
+        )
+
+    if not job.template:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot save placement without an uploaded certificate template.",
+        )
+
+    return JobService.save_placement(job_id, request.placement)
+
+
+@router.get("/{job_id}/placement", response_model=PlacementResponse)
+async def get_placement(job_id: str) -> PlacementResponse:
+    """Retrieve saved placement region for a job."""
+    try:
+        placement = JobService.get_placement(job_id)
+        return PlacementResponse(job_id=job_id, placement=placement)
+    except JobNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job '{job_id}' not found.",
         )
 
 

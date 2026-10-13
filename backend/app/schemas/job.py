@@ -3,6 +3,8 @@ from typing import List, Dict, Optional, Any
 from enum import Enum
 from datetime import datetime
 
+from app.schemas.placement import PlacementRegion
+
 
 class JobStatus(str, Enum):
     CREATED = "created"
@@ -56,6 +58,7 @@ class JobResponse(BaseModel):
     status: JobStatus
     template: Optional[TemplateMetadata] = None
     csv_summary: Optional[CsvSummary] = None
+    placement: Optional[PlacementRegion] = None
     participants_preview: List[ParticipantRecord] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list)
     errors: List[str] = Field(default_factory=list)
