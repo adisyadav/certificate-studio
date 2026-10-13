@@ -487,14 +487,20 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
       setSaveSuccess(true)
       onBatchAnalysisUpdated?.(result.batch_analysis, result.typography)
 
-      // 4. Concise human summary
+      // 4. Concise human summary reflecting batch consistency
+      const total = result.batch_analysis.total_analyzed
+      const consistent = result.batch_analysis.consistent_count ?? (total - result.batch_analysis.reduction_count - result.batch_analysis.overflow_count)
+      const adjusted = result.batch_analysis.adjusted_count ?? result.batch_analysis.reduction_count
+
       if (result.batch_analysis.all_fit) {
-        if (result.batch_analysis.reduction_count > 0) {
+        if (adjusted > 0) {
           setPerfectFitSummary(
-            `All ${result.batch_analysis.total_analyzed} names fit (${result.batch_analysis.reduction_count} resized automatically).`
+            `${total} names optimized. ${consistent} use the same size, ${adjusted} adjusted.`
           )
         } else {
-          setPerfectFitSummary(`All ${result.batch_analysis.total_analyzed} names fit perfectly.`)
+          setPerfectFitSummary(
+            `All ${total} names optimized to ${result.optimal_size}px.`
+          )
         }
       } else {
         const overflow = result.batch_analysis.overflow_count
@@ -1067,8 +1073,32 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
             {showAdvanced && (
               <div className="p-4 pt-1 border-t border-slate-100 space-y-4 text-xs">
                 <div>
+                  <label className="font-medium text-slate-700 block mb-1">
+                    Batch Sizing Mode
+                  </label>
+                  <select
+                    value={typography.sizing_mode || 'smart_consistent'}
+                    onChange={(e) => {
+                      setTypography({
+                        ...typography,
+                        sizing_mode: e.target.value as 'smart_consistent' | 'individual_max',
+                      })
+                      setHasUnsavedTypography(true)
+                      setSaveSuccess(false)
+                    }}
+                    className="w-full bg-white border border-slate-300 rounded-md py-1.5 px-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 shadow-xs"
+                  >
+                    <option value="smart_consistent">Smart / Consistent (Recommended)</option>
+                    <option value="individual_max">Individually Maximized</option>
+                  </select>
+                  <span className="text-[10px] text-slate-500 block mt-1">
+                    Consistent mode shares the target font size across all standard names.
+                  </span>
+                </div>
+
+                <div>
                   <div className="flex justify-between mb-1">
-                    <span className="font-medium text-slate-700">Preferred Font Size</span>
+                    <span className="font-medium text-slate-700">Target Font Size</span>
                     <span className="font-mono text-slate-600">{typography.preferred_font_size}px</span>
                   </div>
                   <input

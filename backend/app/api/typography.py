@@ -293,6 +293,9 @@ async def auto_fit_typography(job_id: str) -> AutoFitResponse:
         min_font_size=current_config.min_font_size,
         text_color=current_config.text_color,
         alignment=current_config.alignment,
+        sizing_mode=current_config.sizing_mode,
+        vertical_clearance_percent=current_config.vertical_clearance_percent,
+        horizontal_clearance_percent=current_config.horizontal_clearance_percent,
     )
 
     # Save to job

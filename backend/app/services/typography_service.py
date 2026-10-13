@@ -7,6 +7,7 @@ from app.schemas.typography import (
     TypographyLayoutResult,
     LayoutBounds,
     TextAlignment,
+    SizingMode,
 )
 from app.services.font_service import FontService
 
@@ -16,6 +17,8 @@ class TypographyService:
     Authoritative text layout and intelligent auto-fit engine.
     Calculates exact text bounds, visual ascenders/descenders,
     stable baseline positioning, and deterministic font sizing via binary search.
+    Supports batch-consistent typography (smart_consistent) where participants share
+    a common target font size without enlarging short names excessively.
     """
 
     @classmethod
@@ -57,6 +60,9 @@ class TypographyService:
         safe_h = max(10.0, safe_bottom - safe_top)
 
         # 3. Deterministic binary search for the largest font size that fits safe_w and safe_h
+        # In SMART_CONSISTENT mode, preferred_font_size acts as the shared target upper bound.
+        # Short names are NOT enlarged beyond preferred_font_size.
+        # Outlier long names scale down towards min_font_size.
         fitted_size, fits = cls._fit_font_size(
             text=name_clean,
             font_id=config.font_id,
@@ -216,26 +222,20 @@ class TypographyService:
         upper_bound_cap: int = 76,
     ) -> int:
         """
-        Determines the optimal preferred_font_size across all participants.
+        Determines the optimal shared batch target font size across participants.
 
-        Optimization Policy:
-        1. Box boundary calculation with safe padding (configurable clearance).
-        2. Measures the maximum font size that fits for each valid participant.
-        3. If names is empty, returns config.preferred_font_size.
-        4. Calculates max_possible_size for the box (upper bounded by box height or upper_bound_cap).
-        5. Computes the maximum font size each name can support up to upper_bound_cap.
-        6. Strategy:
-           - We want short/standard names to be prominently readable and look great.
-           - We do not want an extreme outlier (e.g. 80 character name) to force all short names
-             down to tiny 18px text if the engine can automatically downscale outlier names individually!
-           - However, for standard distribution of names (e.g. up to 90th percentile), we find a preferred
-             font size that provides generous visual impact while minimizing how many names require reduction.
-           - Specifically:
-             - Check the size that fits 100% of participants. If that size >= 32px, that fits everyone cleanly without reduction!
-             - If the 100% size is very small (e.g. < 28px) because of a single ultra-long name, select the 75th-85th percentile
-               optimal size (clamped to at least 36px and at most upper_bound_cap) so standard names look beautiful,
-               while individual long names safely scale down via the per-participant layout engine.
-             - In all cases, the optimal size is clamped between config.min_font_size and upper_bound_cap.
+        Optimization Principles for Batch Consistency:
+        1. Professional certificates look best when the vast majority of recipients
+           share the EXACT SAME font size.
+        2. Short names must NOT be blown up to absurdly large sizes simply because they have fewer letters.
+        3. Only exceptional, unusually long names are scaled down individually to avoid truncation.
+        4. Strategy:
+           - Measure the maximum fitting font size for every participant name within the box.
+           - Identify a shared target size S_target such that:
+             a) If 100% of participants can fit at a handsome readable size (>= 36px), use min_fitted_all.
+             b) If a few outlier names are very long, pick a target size that covers the 75th-90th percentile
+                (or median if needed), bounded between standard readable sizes (e.g. 40px - 56px).
+             c) Clamped to [config.min_font_size, upper_bound_cap].
         """
         valid_names = [n.strip() for n in names if n.strip()]
         if not valid_names:
@@ -248,8 +248,8 @@ class TypographyService:
         safe_w = max(10.0, region_w - 2 * pad_x)
         safe_h = max(10.0, region_h - 2 * pad_y)
 
-        # Theoretical maximum height limit
-        max_limit = min(upper_bound_cap, max(config.min_font_size + 4, int(safe_h * 0.95)))
+        # Box height constraint cap: text height shouldn't exceed ~90% of safe height
+        max_limit = min(upper_bound_cap, max(config.min_font_size + 4, int(safe_h * 0.90)))
 
         # Find max fitting size for each name
         fitting_sizes: List[int] = []
@@ -267,20 +267,21 @@ class TypographyService:
         fitting_sizes.sort()
 
         min_fitted_all = fitting_sizes[0]
+        p75_fitted = fitting_sizes[int(len(fitting_sizes) * 0.75)]
         median_fitted = fitting_sizes[len(fitting_sizes) // 2]
-        p80_fitted = fitting_sizes[int(len(fitting_sizes) * 0.8)]
 
-        if min_fitted_all >= 34:
-            # Everyone fits comfortably at min_fitted_all!
+        # Count how many fit at candidate sizes
+        # If min_fitted_all is already comfortably readable (>= 42px), everyone can use min_fitted_all!
+        if min_fitted_all >= 42:
             optimal = min_fitted_all
-        elif min_fitted_all >= 28:
-            # Almost everyone fits; choose between min_fitted_all and p80
-            optimal = min(min_fitted_all, 48)
         else:
-            # There are long outliers. Don't shrink normal names to < 28px.
-            # Pick a handsome preferred size (median or p80 capped around 48-56px),
-            # and let the per-participant engine scale down outliers.
-            optimal = min(max(median_fitted, 36), 56)
+            # If there are outliers pulling min_fitted_all down,
+            # choose a handsome target font size (around 46-52px, bounded by p75 / median)
+            # so the majority of names share that prominent target size,
+            # while the few outlier names are automatically scaled down.
+            target_candidate = min(p75_fitted, 52)
+            # But ensure target candidate is at least 42px or median
+            optimal = max(target_candidate, min(median_fitted, 44))
 
         # Final safety bounds
         optimal = max(config.min_font_size, min(optimal, max_limit))

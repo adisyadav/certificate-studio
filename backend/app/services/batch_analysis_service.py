@@ -38,6 +38,7 @@ class BatchAnalysisService:
             "min_size": config.min_font_size,
             "text_color": config.text_color.lower(),
             "alignment": config.alignment.value,
+            "sizing_mode": getattr(config, "sizing_mode", "smart_consistent"),
             "vertical_clearance": round(config.vertical_clearance_percent if config.vertical_clearance_percent is not None else 0.08, 4),
             "horizontal_clearance": round(config.horizontal_clearance_percent if config.horizontal_clearance_percent is not None else 0.04, 4),
             "participant_count": participant_count,
@@ -72,6 +73,9 @@ class BatchAnalysisService:
                 reduction_count=0,
                 unsupported_glyph_count=0,
                 insufficient_clearance_count=0,
+                shared_target_font_size=config.preferred_font_size,
+                consistent_count=0,
+                adjusted_count=0,
                 warnings=["No valid participants to analyze."],
                 config_fingerprint=fingerprint,
             )
@@ -176,6 +180,10 @@ class BatchAnalysisService:
                 f"{unsupported_glyph_count} participant name(s) contain characters unsupported by '{config.font_id}'."
             )
 
+        shared_target = config.preferred_font_size
+        consistent_count = sum(1 for a in analyses if a.fitted_font_size == shared_target and not a.is_overflowing)
+        adjusted_count = sum(1 for a in analyses if a.fitted_font_size < shared_target and not a.is_overflowing)
+
         return BatchTypographyReport(
             total_analyzed=len(valid_participants),
             all_fit=(overflow_count == 0 and unsupported_glyph_count == 0),
@@ -183,6 +191,9 @@ class BatchAnalysisService:
             reduction_count=reduction_count,
             unsupported_glyph_count=unsupported_glyph_count,
             insufficient_clearance_count=insufficient_clearance_count,
+            shared_target_font_size=shared_target,
+            consistent_count=consistent_count,
+            adjusted_count=adjusted_count,
             shortest_name=shortest_name,
             longest_name_by_chars=longest_name_by_chars,
             widest_name=widest_name,

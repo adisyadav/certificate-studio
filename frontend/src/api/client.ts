@@ -7,6 +7,7 @@ export interface HealthStatus {
 export type JobStatus = 'created' | 'template_uploaded' | 'csv_uploaded' | 'ready'
 export type TemplateOrientation = 'landscape' | 'portrait' | 'square'
 export type TextAlignment = 'center' | 'left' | 'right'
+export type SizingMode = 'smart_consistent' | 'individual_max'
 
 export interface FontInfo {
   id: string
@@ -22,6 +23,7 @@ export interface TypographyConfig {
   min_font_size: number
   text_color: string
   alignment: TextAlignment
+  sizing_mode?: SizingMode
   vertical_clearance_percent?: number
   horizontal_clearance_percent?: number
 }
@@ -64,6 +66,9 @@ export interface BatchTypographyReport {
   reduction_count: number
   unsupported_glyph_count: number
   insufficient_clearance_count?: number
+  shared_target_font_size?: number | null
+  consistent_count?: number
+  adjusted_count?: number
   shortest_name: string | null
   longest_name_by_chars: string | null
   widest_name: string | null

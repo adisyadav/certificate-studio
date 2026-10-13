@@ -10,6 +10,11 @@ class TextAlignment(str, Enum):
     RIGHT = "right"
 
 
+class SizingMode(str, Enum):
+    SMART_CONSISTENT = "smart_consistent"
+    INDIVIDUAL_MAX = "individual_max"
+
+
 class FontInfo(BaseModel):
     id: str
     name: str
@@ -24,6 +29,7 @@ class TypographyConfig(BaseModel):
     min_font_size: int = Field(default=18, ge=8, le=100)
     text_color: str = Field(default="#111827", pattern=r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
     alignment: TextAlignment = TextAlignment.CENTER
+    sizing_mode: SizingMode = SizingMode.SMART_CONSISTENT
     vertical_clearance_percent: float = Field(default=0.08, ge=0.0, le=0.30)
     horizontal_clearance_percent: float = Field(default=0.04, ge=0.0, le=0.30)
 
@@ -71,6 +77,9 @@ class BatchTypographyReport(BaseModel):
     reduction_count: int
     unsupported_glyph_count: int
     insufficient_clearance_count: int = 0
+    shared_target_font_size: Optional[int] = None
+    consistent_count: int = 0
+    adjusted_count: int = 0
     shortest_name: Optional[str] = None
     longest_name_by_chars: Optional[str] = None
     widest_name: Optional[str] = None
