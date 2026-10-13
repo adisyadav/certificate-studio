@@ -24,7 +24,7 @@ class BatchAnalysisService:
         """
         Creates a deterministic hash representing the exact certificate configuration.
         Any change to template dimensions, placement box, font family, font size,
-        color, alignment, or participant count alters this fingerprint.
+        color, alignment, clearance margins, or participant count alters this fingerprint.
         """
         data = {
             "template_w": template_meta.width,
@@ -38,6 +38,8 @@ class BatchAnalysisService:
             "min_size": config.min_font_size,
             "text_color": config.text_color.lower(),
             "alignment": config.alignment.value,
+            "vertical_clearance": round(config.vertical_clearance_percent if config.vertical_clearance_percent is not None else 0.08, 4),
+            "horizontal_clearance": round(config.horizontal_clearance_percent if config.horizontal_clearance_percent is not None else 0.04, 4),
             "participant_count": participant_count,
         }
         encoded = json.dumps(data, sort_keys=True).encode("utf-8")
@@ -69,15 +71,16 @@ class BatchAnalysisService:
                 overflow_count=0,
                 reduction_count=0,
                 unsupported_glyph_count=0,
+                insufficient_clearance_count=0,
                 warnings=["No valid participants to analyze."],
                 config_fingerprint=fingerprint,
             )
-
 
         analyses: List[ParticipantTypographyAnalysis] = []
         overflow_count = 0
         reduction_count = 0
         unsupported_glyph_count = 0
+        insufficient_clearance_count = 0
 
         shortest_name: Optional[str] = None
         longest_name_by_chars: Optional[str] = None
@@ -129,6 +132,21 @@ class BatchAnalysisService:
             if requires_reduction and not is_overflow:
                 reduction_count += 1
 
+            # Insufficient safe-area clearance at preferred size
+            insufficient_clearance = is_overflow or requires_reduction
+            if insufficient_clearance:
+                insufficient_clearance_count += 1
+
+            # Human-readable status label distinguishing containment states
+            if is_overflow:
+                status_label = "Cannot fit above minimum size"
+            elif has_unsupported:
+                status_label = "Unsupported glyphs"
+            elif requires_reduction:
+                status_label = "Fits after automatic reduction"
+            else:
+                status_label = "Fits at preferred size"
+
             analyses.append(
                 ParticipantTypographyAnalysis(
                     row_number=p.row_number,
@@ -136,6 +154,8 @@ class BatchAnalysisService:
                     fitted_font_size=layout.font_size,
                     is_overflowing=is_overflow,
                     requires_reduction=requires_reduction,
+                    insufficient_clearance=insufficient_clearance,
+                    status_label=status_label,
                     has_unsupported_glyphs=has_unsupported,
                     unsupported_glyphs=glyph_res.unsupported_chars,
                     visual_width=natural_width,
@@ -149,7 +169,7 @@ class BatchAnalysisService:
             )
         if reduction_count > 0:
             warnings.append(
-                f"{reduction_count} participant name(s) required automatic font scaling to fit safely."
+                f"{reduction_count} participant name(s) required automatic font scaling to fit safely within safe printing clearance."
             )
         if unsupported_glyph_count > 0:
             warnings.append(
@@ -162,6 +182,7 @@ class BatchAnalysisService:
             overflow_count=overflow_count,
             reduction_count=reduction_count,
             unsupported_glyph_count=unsupported_glyph_count,
+            insufficient_clearance_count=insufficient_clearance_count,
             shortest_name=shortest_name,
             longest_name_by_chars=longest_name_by_chars,
             widest_name=widest_name,

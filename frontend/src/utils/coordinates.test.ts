@@ -32,4 +32,28 @@ describe('coordinate conversion utilities', () => {
     expect(clamped.x + clamped.width).toBeLessThanOrEqual(1.0001)
     expect(clamped.y + clamped.height).toBeLessThanOrEqual(1.0001)
   })
+
+  it('accurately derives inner safe clearance guides', () => {
+    const canvasRect = { x: 100, y: 200, width: 400, height: 100 }
+    const vertClearance = 0.08
+    const horizClearance = 0.04
+    const padX = canvasRect.width * horizClearance
+    const padY = canvasRect.height * vertClearance
+
+    const safeGuide = {
+      x: canvasRect.x + padX,
+      y: canvasRect.y + padY,
+      width: canvasRect.width - 2 * padX,
+      height: canvasRect.height - 2 * padY,
+    }
+
+    expect(safeGuide).toEqual({
+      x: 116,
+      y: 208,
+      width: 368,
+      height: 84,
+    })
+    expect(safeGuide.height).toBeLessThan(canvasRect.height)
+    expect(safeGuide.y + safeGuide.height).toBeLessThan(canvasRect.y + canvasRect.height)
+  })
 })

@@ -487,6 +487,12 @@ export const ExportWorkspace: React.FC<ExportWorkspaceProps> = ({
                   <strong className="text-slate-900 capitalize">{typography.alignment}</strong>
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-100">
+                  <span className="text-slate-500">Vertical Clearance:</span>
+                  <strong className="text-slate-900 font-mono">
+                    {Math.round((typography.vertical_clearance_percent ?? 0.08) * 100)}% (safe padding)
+                  </strong>
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-100">
                   <span className="text-slate-500">Text Color:</span>
                   <div className="flex items-center gap-1.5">
                     <span

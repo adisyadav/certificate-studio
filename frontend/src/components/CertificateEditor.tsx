@@ -25,6 +25,7 @@ import {
   AlertTriangle,
   Wand2,
   Sparkles,
+  ShieldCheck,
 } from 'lucide-react'
 import type {
   TemplateMetadata,
@@ -121,9 +122,12 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
       min_font_size: 18,
       text_color: '#111827',
       alignment: 'center',
+      vertical_clearance_percent: 0.08,
+      horizontal_clearance_percent: 0.04,
     }
   )
   const [hasUnsavedTypography, setHasUnsavedTypography] = useState<boolean>(false)
+  const [showSafeGuide, setShowSafeGuide] = useState<boolean>(true)
 
   // 5. Participants selection: default to first valid participant from CSV if available
   const validParticipants = useMemo(
@@ -658,6 +662,20 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
 
 
             <div className="flex items-center gap-2 text-[11px]">
+              <button
+                type="button"
+                onClick={() => setShowSafeGuide(!showSafeGuide)}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border transition-colors ${
+                  showSafeGuide
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-300 font-medium'
+                    : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                }`}
+                title="Toggle inner safe-area printing boundary"
+              >
+                <ShieldCheck className="h-3 w-3 text-emerald-600" />
+                <span>Safe Guide ({Math.round((typography.vertical_clearance_percent ?? 0.08) * 100)}%)</span>
+              </button>
+
               {backendFittedSize && (
                 <span className="font-mono text-slate-600 bg-white px-2 py-0.5 rounded border border-slate-200">
                   Fitted: <strong>{backendFittedSize}px</strong>
@@ -728,12 +746,26 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
                     onTransformEnd={handleTransformEnd}
                   />
 
-                  {/* 3. Personalized Name with loaded font & live auto-fit sizing */}
+                  {/* 3. Inner Safe-Area Clearance Guide (Visual assurance) */}
+                  {showSafeGuide && (
+                    <Rect
+                      x={canvasRect.x + canvasRect.width * (typography.horizontal_clearance_percent ?? 0.04)}
+                      y={canvasRect.y + canvasRect.height * (typography.vertical_clearance_percent ?? 0.08)}
+                      width={Math.max(10, canvasRect.width * (1 - 2 * (typography.horizontal_clearance_percent ?? 0.04)))}
+                      height={Math.max(10, canvasRect.height * (1 - 2 * (typography.vertical_clearance_percent ?? 0.08)))}
+                      stroke="rgba(16, 185, 129, 0.85)"
+                      strokeWidth={1}
+                      dash={[4, 3]}
+                      listening={false}
+                    />
+                  )}
+
+                  {/* 4. Personalized Name with loaded font & live auto-fit sizing */}
                   <KonvaText
-                    x={canvasRect.x}
-                    y={canvasRect.y}
-                    width={canvasRect.width}
-                    height={canvasRect.height}
+                    x={canvasRect.x + canvasRect.width * (typography.horizontal_clearance_percent ?? 0.04)}
+                    y={canvasRect.y + canvasRect.height * (typography.vertical_clearance_percent ?? 0.08)}
+                    width={Math.max(10, canvasRect.width * (1 - 2 * (typography.horizontal_clearance_percent ?? 0.04)))}
+                    height={Math.max(10, canvasRect.height * (1 - 2 * (typography.vertical_clearance_percent ?? 0.08)))}
                     text={selectedSample}
                     fontSize={displayFontSize}
                     fontFamily={displayFontFamily}
@@ -926,6 +958,69 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
                   Text will never shrink below this limit.
                 </span>
               </div>
+
+              {/* Vertical Text Clearance Control */}
+              <div className="pt-2 border-t border-slate-100 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-slate-800 flex items-center gap-1">
+                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+                    <span>Vertical Text Clearance</span>
+                  </span>
+                  <span className="font-mono text-xs font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                    {Math.round((typography.vertical_clearance_percent ?? 0.08) * 100)}%
+                  </span>
+                </div>
+
+                {/* Quick Presets */}
+                <div className="grid grid-cols-4 gap-1">
+                  {[
+                    { label: '4%', val: 0.04 },
+                    { label: '8% (Def)', val: 0.08 },
+                    { label: '12%', val: 0.12 },
+                    { label: '16%', val: 0.16 },
+                  ].map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => {
+                        setTypography({
+                          ...typography,
+                          vertical_clearance_percent: preset.val,
+                        })
+                        setHasUnsavedTypography(true)
+                        setSaveSuccess(false)
+                      }}
+                      className={`py-1 text-[11px] font-medium rounded border transition-colors ${
+                        Math.abs((typography.vertical_clearance_percent ?? 0.08) - preset.val) < 0.005
+                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+
+                <input
+                  type="range"
+                  min="0"
+                  max="25"
+                  step="1"
+                  value={Math.round((typography.vertical_clearance_percent ?? 0.08) * 100)}
+                  onChange={(e) => {
+                    setTypography({
+                      ...typography,
+                      vertical_clearance_percent: Number(e.target.value) / 100.0,
+                    })
+                    setHasUnsavedTypography(true)
+                    setSaveSuccess(false)
+                  }}
+                  className="w-full accent-emerald-600 cursor-pointer"
+                />
+                <span className="text-[10px] text-slate-400 block">
+                  Protects certificate artwork & lines from calligraphic descenders (y, g, j, p, q).
+                </span>
+              </div>
             </div>
           </div>
 
@@ -1060,6 +1155,12 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
                     <strong className={batchReport.all_fit ? 'text-emerald-700' : 'text-rose-700'}>
                       {batchReport.all_fit ? 'All names fit safely' : `${batchReport.overflow_count} names overflow`}
                     </strong>
+                  </div>
+                  <div className="flex justify-between text-[10px] text-slate-500 pt-0.5 border-t border-slate-200/60">
+                    <span>Clearance Margin:</span>
+                    <span className="font-medium text-emerald-700">
+                      {Math.round((typography.vertical_clearance_percent ?? 0.08) * 100)}% vertical safe padding
+                    </span>
                   </div>
                 </div>
 

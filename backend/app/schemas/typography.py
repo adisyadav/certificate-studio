@@ -24,6 +24,8 @@ class TypographyConfig(BaseModel):
     min_font_size: int = Field(default=18, ge=8, le=100)
     text_color: str = Field(default="#111827", pattern=r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
     alignment: TextAlignment = TextAlignment.CENTER
+    vertical_clearance_percent: float = Field(default=0.08, ge=0.0, le=0.30)
+    horizontal_clearance_percent: float = Field(default=0.04, ge=0.0, le=0.30)
 
 
 class GlyphCheckResult(BaseModel):
@@ -44,6 +46,8 @@ class TypographyLayoutResult(BaseModel):
     fitted_at_reduced_size: bool
     text_bounds: LayoutBounds
     draw_position: Dict[str, float]
+    safe_bounds: Optional[LayoutBounds] = None
+    baseline_y: Optional[float] = None
     warnings: List[str] = Field(default_factory=list)
 
 
@@ -53,6 +57,8 @@ class ParticipantTypographyAnalysis(BaseModel):
     fitted_font_size: int
     is_overflowing: bool
     requires_reduction: bool
+    insufficient_clearance: bool = False
+    status_label: str = "Fits at preferred size"
     has_unsupported_glyphs: bool
     unsupported_glyphs: List[str] = Field(default_factory=list)
     visual_width: float
@@ -64,6 +70,7 @@ class BatchTypographyReport(BaseModel):
     overflow_count: int
     reduction_count: int
     unsupported_glyph_count: int
+    insufficient_clearance_count: int = 0
     shortest_name: Optional[str] = None
     longest_name_by_chars: Optional[str] = None
     widest_name: Optional[str] = None

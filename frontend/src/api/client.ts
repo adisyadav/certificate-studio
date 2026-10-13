@@ -22,6 +22,8 @@ export interface TypographyConfig {
   min_font_size: number
   text_color: string
   alignment: TextAlignment
+  vertical_clearance_percent?: number
+  horizontal_clearance_percent?: number
 }
 
 export interface LayoutBounds {
@@ -37,6 +39,8 @@ export interface TypographyLayoutResult {
   fitted_at_reduced_size: boolean
   text_bounds: LayoutBounds
   draw_position: { x: number; y: number }
+  safe_bounds?: LayoutBounds
+  baseline_y?: number
   warnings: string[]
 }
 
@@ -46,6 +50,8 @@ export interface ParticipantTypographyAnalysis {
   fitted_font_size: number
   is_overflowing: boolean
   requires_reduction: boolean
+  insufficient_clearance?: boolean
+  status_label?: string
   has_unsupported_glyphs: boolean
   unsupported_glyphs: string[]
   visual_width: number
@@ -57,6 +63,7 @@ export interface BatchTypographyReport {
   overflow_count: number
   reduction_count: number
   unsupported_glyph_count: number
+  insufficient_clearance_count?: number
   shortest_name: string | null
   longest_name_by_chars: string | null
   widest_name: string | null

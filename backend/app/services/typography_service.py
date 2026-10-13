@@ -46,11 +46,15 @@ class TypographyService:
         region_w = placement.width * target_width
         region_h = placement.height * target_height
 
-        # 2. Apply safe padding (4% horizontal, 4% vertical margin)
-        pad_x = region_w * 0.04
-        pad_y = region_h * 0.04
-        safe_w = max(10.0, region_w - 2 * pad_x)
-        safe_h = max(10.0, region_h - 2 * pad_y)
+        # 2. Apply configurable clearance padding (default 4% horizontal, 8% vertical margin)
+        pad_x = region_w * (config.horizontal_clearance_percent if config.horizontal_clearance_percent is not None else 0.04)
+        pad_y = region_h * (config.vertical_clearance_percent if config.vertical_clearance_percent is not None else 0.08)
+        safe_left = region_x + pad_x
+        safe_right = region_x + region_w - pad_x
+        safe_top = region_y + pad_y
+        safe_bottom = region_y + region_h - pad_y
+        safe_w = max(10.0, safe_right - safe_left)
+        safe_h = max(10.0, safe_bottom - safe_top)
 
         # 3. Deterministic binary search for the largest font size that fits safe_w and safe_h
         fitted_size, fits = cls._fit_font_size(
@@ -65,11 +69,11 @@ class TypographyService:
         requires_reduction = fitted_size < config.preferred_font_size
         if not fits:
             warnings.append(
-                f"Text '{name_clean}' cannot fit within the designated area at the minimum readable font size ({config.min_font_size}px). Consider enlarging the area."
+                f"Text '{name_clean}' cannot fit within the designated safe area at the minimum readable font size ({config.min_font_size}px). Consider enlarging the area."
             )
         elif requires_reduction:
             warnings.append(
-                f"Font size auto-reduced from {config.preferred_font_size}px to {fitted_size}px to fit perfectly without clipping."
+                f"Font size auto-reduced from {config.preferred_font_size}px to {fitted_size}px to fit safely within margins without clipping."
             )
 
         # 4. Measure visual ink bounding box and typographic metrics at fitted size
@@ -78,21 +82,25 @@ class TypographyService:
         ascent, descent = font.getmetrics()
 
         # bbox is (left, top, right, bottom) relative to origin (0,0)
+        # Note: bbox[0] may be negative (negative glyph bearing, e.g. -11px in Allura)
         ink_width = bbox[2] - bbox[0]
         ink_height = bbox[3] - bbox[1]
 
-        # 5. Position text inside region:
+        # 5. Position text inside safe region:
         # Horizontal alignment based on bounding box
         if config.alignment == TextAlignment.LEFT:
-            ink_x = region_x + pad_x
+            ink_x = safe_left
         elif config.alignment == TextAlignment.RIGHT:
-            ink_x = region_x + region_w - pad_x - ink_width
+            ink_x = safe_right - ink_width
         else:  # CENTER
-            ink_x = region_x + (region_w - ink_width) / 2.0
+            ink_x = safe_left + (safe_w - ink_width) / 2.0
+
+        # draw_x accounts for negative glyph bearing so ink starts precisely at ink_x
+        draw_x = ink_x - bbox[0]
 
         # Stable typographic vertical centering:
-        # Center the font's typographic body in the box so baseline remains stable across participants
-        box_center_y = region_y + region_h / 2.0
+        # Center the font's typographic body in the safe box so baseline remains stable across participants
+        box_center_y = safe_top + safe_h / 2.0
         baseline_y = box_center_y + (ascent - descent) / 2.0
         draw_y = baseline_y - ascent
 
@@ -100,13 +108,23 @@ class TypographyService:
         actual_ink_top = draw_y + bbox[1]
         actual_ink_bottom = draw_y + bbox[3]
 
-        if actual_ink_top < region_y + pad_y:
-            draw_y += (region_y + pad_y) - actual_ink_top
-        elif actual_ink_bottom > region_y + region_h - pad_y:
-            draw_y -= actual_ink_bottom - (region_y + region_h - pad_y)
+        if actual_ink_bottom > safe_bottom:
+            shift = actual_ink_bottom - safe_bottom
+            draw_y -= shift
+            baseline_y -= shift
+        elif actual_ink_top < safe_top:
+            shift = safe_top - actual_ink_top
+            draw_y += shift
+            baseline_y += shift
 
-        draw_x = ink_x - bbox[0]
         ink_y = draw_y + bbox[1]
+
+        safe_bounds = LayoutBounds(
+            x=round(safe_left, 2),
+            y=round(safe_top, 2),
+            width=round(safe_w, 2),
+            height=round(safe_h, 2),
+        )
 
         return TypographyLayoutResult(
             font_size=fitted_size,
@@ -119,6 +137,8 @@ class TypographyService:
                 height=round(ink_height, 2),
             ),
             draw_position={"x": round(draw_x, 2), "y": round(draw_y, 2)},
+            safe_bounds=safe_bounds,
+            baseline_y=round(baseline_y, 2),
             warnings=warnings,
         )
 
@@ -199,7 +219,7 @@ class TypographyService:
         Determines the optimal preferred_font_size across all participants.
 
         Optimization Policy:
-        1. Box boundary calculation with safe padding (4% horizontal & vertical).
+        1. Box boundary calculation with safe padding (configurable clearance).
         2. Measures the maximum font size that fits for each valid participant.
         3. If names is empty, returns config.preferred_font_size.
         4. Calculates max_possible_size for the box (upper bounded by box height or upper_bound_cap).
@@ -223,8 +243,8 @@ class TypographyService:
 
         region_w = placement.width * target_width
         region_h = placement.height * target_height
-        pad_x = region_w * 0.04
-        pad_y = region_h * 0.04
+        pad_x = region_w * (config.horizontal_clearance_percent if config.horizontal_clearance_percent is not None else 0.04)
+        pad_y = region_h * (config.vertical_clearance_percent if config.vertical_clearance_percent is not None else 0.08)
         safe_w = max(10.0, region_w - 2 * pad_x)
         safe_h = max(10.0, region_h - 2 * pad_y)
 

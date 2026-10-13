@@ -13,13 +13,23 @@ Certificate Studio is organized as a clean, decoupled monorepo:
 
 ---
 
-## Current Status: Milestone 5.1 (Export Validation & Dynamic Pre-Flight Readiness Fix)
+## Current Status: Milestone 5.2 (Precision Name Placement and Glyph-Safe Auto Fit)
 
 ### Key Specifications & Architecture
+- **Strict Glyph Ink Containment & Underline Protection**:
+  - Full ink bounding box measurement using Pillow FreeType font bounds rather than relying solely on EM line metrics.
+  - Negative glyph bearing handling (such as -11px in Allura or -1px in Great Vibes) ensuring ink starts strictly within safe horizontal boundaries.
+  - Automatic baseline clamping within safe vertical margins to guarantee decorative ascenders and descenders (e.g. flourishes on 'y', 'g', 'j', 'p', 'q') never cross safe area boundaries or overlap underlying certificate artwork/lines.
+- **Configurable Text Clearance Margins**:
+  - Configurable vertical and horizontal safety padding (default 8% vertical margin, 4% horizontal margin).
+  - Preserved consistently across backend layout calculation, live interactive preview, batch analysis, and PDF generation.
+  - Interactive UI controls with presets (4%, 8% default, 12%, 16%) and a fine-tuning slider.
+- **Precision Visual Placement & Safe-Area Guide**:
+  - Smooth user-controlled placement rectangle with resize handles.
+  - Visual inner safe-area guide (subtle dashed green guide) with toggle control, allowing users to precisely align the placement area above certificate lines without guessing margins.
 - **Reliable Validation Contract & Configuration Fingerprints**:
-  - Deterministic 16-character SHA-256 fingerprint generated from template dimensions, placement box coordinates, font ID, sizes, color, alignment, and participant counts.
-  - Attached to all `BatchTypographyReport` objects on `/analyze-typography` and `/auto-fit`.
-  - Non-destructive save operations: saving identical placement or typography settings retains existing valid analysis results rather than blindly setting them to `null`.
+  - Deterministic 16-character SHA-256 fingerprint incorporating template dimensions, placement box coordinates, font ID, sizes, color, alignment, clearance margins, and participant counts.
+  - Non-destructive save operations: saving identical placement or typography settings retains existing valid analysis results rather than setting them to `null`.
 - **Self-Sufficient Pre-Flight Readiness in Export Workspace**:
   - Automatically checks readiness and verifies all participant layouts upon entering Step 3 (Generate & Download) if analysis is missing or stale.
   - Eliminates the confusing requirement for users to manually click Analyze as an arbitrary prerequisite.
