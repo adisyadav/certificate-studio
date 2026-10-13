@@ -5,11 +5,9 @@ import {
   CheckCircle2,
   AlertCircle,
   RefreshCw,
-  Sparkles,
   Layers,
   FileText,
   AlertTriangle,
-  Archive,
 } from 'lucide-react'
 import type {
   JobResponse,
@@ -188,13 +186,10 @@ export const ExportWorkspace: React.FC<ExportWorkspaceProps> = ({
             <span>Back to Visual Editor</span>
           </button>
           <h2 className="text-xl font-semibold text-slate-900 tracking-tight flex items-center gap-2">
-            <span>Production Batch Export & Download</span>
-            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-              Step 3 of 3
-            </span>
+            <span>Export Certificates</span>
           </h2>
           <p className="text-xs text-slate-500">
-            Generate individual, verified personalized PDFs for every valid participant and download as a ZIP archive.
+            Generate individual, print-ready personalized PDFs for every valid participant and download as a ZIP archive.
           </p>
         </div>
 
@@ -202,19 +197,19 @@ export const ExportWorkspace: React.FC<ExportWorkspaceProps> = ({
           <button
             type="button"
             onClick={onBackToEditor}
-            className="px-3.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 text-xs font-medium hover:bg-slate-50 transition-colors flex items-center gap-1.5"
+            className="px-3.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 text-xs font-medium hover:bg-slate-50 transition-colors"
           >
-            <span>Adjust Typography</span>
+            Adjust Typography
           </button>
         </div>
       </div>
 
       {errorMessage && (
-        <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start justify-between gap-2.5 shadow-xs">
+        <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start justify-between gap-2.5">
           <div className="flex items-start gap-2.5">
             <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-rose-600" />
             <div className="space-y-1">
-              <p className="font-semibold">Batch Export Notice</p>
+              <p className="font-medium text-rose-800">Batch Export Notice</p>
               <p className="whitespace-pre-line leading-relaxed">{errorMessage}</p>
             </div>
           </div>
@@ -225,7 +220,7 @@ export const ExportWorkspace: React.FC<ExportWorkspaceProps> = ({
               handleStartExport()
             }}
             disabled={Boolean(isStarting || isGenerating)}
-            className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-semibold shrink-0 transition-colors"
+            className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium shrink-0 transition-colors"
           >
             Retry Export
           </button>
@@ -237,26 +232,25 @@ export const ExportWorkspace: React.FC<ExportWorkspaceProps> = ({
         {/* Left 2 Cols: Generation Card & Progress */}
         <div className="lg:col-span-2 space-y-6">
           {/* Export Action Card */}
-          <div className="p-6 rounded-2xl border border-slate-200 bg-white shadow-xs space-y-5">
+          <div className="p-6 rounded-xl border border-slate-200 bg-white shadow-xs space-y-5">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
-                  <Archive className="h-4 w-4 text-indigo-600" />
-                  <span>Batch PDF Generator</span>
+                <h3 className="text-sm font-semibold text-slate-900">
+                  Batch PDF Generation
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Processes all valid participants individually with authoritative font auto-fitting.
+                  Generates vector-crisp personalized certificates formatted with exact typography.
                 </p>
               </div>
 
               {isCompleted ? (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
                   <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
                   <span>Ready for Download</span>
                 </span>
               ) : isGenerating ? (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                  <RefreshCw className="h-3.5 w-3.5 animate-spin text-indigo-600" />
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin text-slate-600" />
                   <span className="capitalize">{activeExport?.status}...</span>
                 </span>
               ) : null}
@@ -264,10 +258,10 @@ export const ExportWorkspace: React.FC<ExportWorkspaceProps> = ({
 
             {/* Progress Section */}
             {activeExport && (
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-3">
+              <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-3">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-medium text-slate-700 flex items-center gap-2">
-                    {isGenerating && <RefreshCw className="h-3.5 w-3.5 animate-spin text-indigo-600" />}
+                    {isGenerating && <RefreshCw className="h-3.5 w-3.5 animate-spin text-slate-600" />}
                     {isCompleted && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}
                     {isFailed && <AlertCircle className="h-3.5 w-3.5 text-rose-600" />}
                     <span>
@@ -278,29 +272,29 @@ export const ExportWorkspace: React.FC<ExportWorkspaceProps> = ({
                         : `Processing: ${activeExport.processed_count} of ${activeExport.total_count} certificates completed`}
                     </span>
                   </span>
-                  <span className="font-mono font-semibold text-slate-900">
+                  <span className="font-mono font-medium text-slate-900">
                     {activeExport.percent_complete}%
                   </span>
                 </div>
 
                 {/* Progress Bar */}
-                <div className="w-full h-2.5 rounded-full bg-slate-200 overflow-hidden">
+                <div className="w-full h-2 rounded-full bg-slate-200 overflow-hidden">
                   <div
                     className={`h-full transition-all duration-300 rounded-full ${
                       isCompleted
-                        ? 'bg-emerald-500'
+                        ? 'bg-emerald-600'
                         : isFailed
                         ? 'bg-rose-500'
-                        : 'bg-indigo-600'
+                        : 'bg-slate-900'
                     }`}
                     style={{ width: `${activeExport.percent_complete}%` }}
                   />
                 </div>
 
                 <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
-                  <span>Current Stage: <strong className="text-slate-700 capitalize">{activeExport.status}</strong></span>
+                  <span>Current Stage: <strong className="text-slate-700 capitalize font-medium">{activeExport.status}</strong></span>
                   {activeExport.zip_size_bytes && (
-                    <span>Archive Size: <strong>{formatBytes(activeExport.zip_size_bytes)}</strong></span>
+                    <span>Archive Size: <strong className="text-slate-700 font-medium">{formatBytes(activeExport.zip_size_bytes)}</strong></span>
                   )}
                 </div>
               </div>
@@ -308,16 +302,16 @@ export const ExportWorkspace: React.FC<ExportWorkspaceProps> = ({
 
             {/* Readiness and Validation States */}
             {isValidating && (
-              <div className="p-3.5 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs flex items-center justify-between gap-2.5">
+              <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 text-xs flex items-center justify-between gap-2.5">
                 <div className="flex items-center gap-2.5">
-                  <RefreshCw className="h-4 w-4 animate-spin text-indigo-600 shrink-0" />
-                  <span>Checking certificate readiness and verifying all participant layouts...</span>
+                  <RefreshCw className="h-4 w-4 animate-spin text-slate-600 shrink-0" />
+                  <span>Verifying all participant layouts and bounding clearances...</span>
                 </div>
               </div>
             )}
 
             {!isValidating && !hasAnalysis && (
-              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center justify-between gap-2.5">
+              <div className="p-3.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center justify-between gap-2.5">
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
                   <span>Certificate configuration has not been validated yet.</span>
@@ -325,7 +319,7 @@ export const ExportWorkspace: React.FC<ExportWorkspaceProps> = ({
                 <button
                   type="button"
                   onClick={runPreFlightValidation}
-                  className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded font-medium text-[11px]"
+                  className="px-2.5 py-1 bg-amber-700 hover:bg-amber-800 text-white rounded font-medium text-[11px]"
                 >
                   Run Readiness Check
                 </button>
@@ -333,7 +327,7 @@ export const ExportWorkspace: React.FC<ExportWorkspaceProps> = ({
             )}
 
             {!isValidating && hasAnalysis && allFit && (
-              <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between gap-2.5">
+              <div className="p-3.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between gap-2.5">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
                   <span>
@@ -343,7 +337,7 @@ export const ExportWorkspace: React.FC<ExportWorkspaceProps> = ({
                 <button
                   type="button"
                   onClick={runPreFlightValidation}
-                  className="text-emerald-700 hover:text-emerald-900 underline text-[11px]"
+                  className="text-emerald-700 hover:text-emerald-900 underline text-[11px] font-medium"
                 >
                   Re-check
                 </button>
@@ -351,7 +345,7 @@ export const ExportWorkspace: React.FC<ExportWorkspaceProps> = ({
             )}
 
             {!isValidating && hasAnalysis && !allFit && (
-              <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center justify-between gap-2.5">
+              <div className="p-3.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center justify-between gap-2.5">
                 <div className="flex items-start gap-2">
                   <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-rose-600" />
                   <div>
@@ -371,20 +365,15 @@ export const ExportWorkspace: React.FC<ExportWorkspaceProps> = ({
               </div>
             )}
 
-
             {/* Action Buttons */}
             <div className="flex flex-wrap items-center gap-3 pt-2">
               <button
                 type="button"
                 onClick={handleStartExport}
                 disabled={!canStartExport}
-                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white text-xs font-semibold shadow-sm transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="px-5 py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium shadow-xs transition-colors flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {isGenerating ? (
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Sparkles className="h-4 w-4 text-amber-300" />
-                )}
+                {isGenerating && <RefreshCw className="h-4 w-4 animate-spin text-slate-300" />}
                 <span>
                   {isGenerating
                     ? 'Generating Batch...'
@@ -398,7 +387,7 @@ export const ExportWorkspace: React.FC<ExportWorkspaceProps> = ({
                 <a
                   href={downloadUrl}
                   download="certificates.zip"
-                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm transition-all flex items-center gap-2"
+                  className="px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium shadow-xs transition-colors flex items-center gap-2"
                 >
                   <Download className="h-4 w-4" />
                   <span>Download certificates.zip</span>
@@ -409,15 +398,15 @@ export const ExportWorkspace: React.FC<ExportWorkspaceProps> = ({
 
           {/* Detailed Participant Export Report */}
           {activeExport?.report && (
-            <div className="p-5 rounded-2xl border border-slate-200 bg-white shadow-xs space-y-4">
+            <div className="p-5 rounded-xl border border-slate-200 bg-white shadow-xs space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                 <div className="flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-indigo-600" />
+                  <FileText className="h-4 w-4 text-slate-600" />
                   <h4 className="text-xs font-semibold text-slate-900">
                     Generated Participant Archive ({activeExport.report.certificates.length} PDFs)
                   </h4>
                 </div>
-                <span className="text-[11px] font-mono text-slate-500">
+                <span className="text-[11px] font-mono text-slate-400">
                   Export ID: {activeExport.export_id.slice(0, 8)}
                 </span>
               </div>
@@ -435,13 +424,13 @@ export const ExportWorkspace: React.FC<ExportWorkspaceProps> = ({
                       <span className="font-medium text-slate-800 truncate">
                         {cert.name}
                       </span>
-                      <span className="text-[11px] font-mono text-slate-500 truncate">
+                      <span className="text-[11px] font-mono text-slate-400 truncate">
                         ({cert.filename})
                       </span>
                     </div>
 
                     <div className="flex items-center gap-3 shrink-0">
-                      <span className="font-mono text-[11px] text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                      <span className="font-mono text-[11px] text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
                         {cert.fitted_font_size}px
                       </span>
                       <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
@@ -455,15 +444,15 @@ export const ExportWorkspace: React.FC<ExportWorkspaceProps> = ({
 
         {/* Right 1 Col: Batch Snapshot & Specification */}
         <div className="space-y-4">
-          <div className="p-5 rounded-2xl border border-slate-200 bg-white shadow-xs space-y-4">
+          <div className="p-5 rounded-xl border border-slate-200 bg-white shadow-xs space-y-4">
             <h4 className="text-xs font-semibold text-slate-900 pb-2 border-b border-slate-100 flex items-center gap-2">
-              <Layers className="h-4 w-4 text-indigo-600" />
-              <span>Export Configuration Snapshot</span>
+              <Layers className="h-4 w-4 text-slate-600" />
+              <span>Configuration Summary</span>
             </h4>
 
             {/* Template Card */}
             {template && (
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center gap-3">
+              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 flex items-center gap-3">
                 <img
                   src={getTemplatePreviewUrl(template.preview_url)}
                   alt="Template"
@@ -485,23 +474,23 @@ export const ExportWorkspace: React.FC<ExportWorkspaceProps> = ({
               <div className="space-y-2 text-xs">
                 <div className="flex justify-between py-1 border-b border-slate-100">
                   <span className="text-slate-500">Selected Font:</span>
-                  <strong className="text-slate-900 capitalize">{typography.font_id.replace('_', ' ')}</strong>
+                  <strong className="text-slate-900 font-medium capitalize">{typography.font_id.replace('_', ' ')}</strong>
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-100">
                   <span className="text-slate-500">Preferred Font Size:</span>
-                  <strong className="text-slate-900 font-mono">{typography.preferred_font_size}px</strong>
+                  <strong className="text-slate-900 font-medium font-mono">{typography.preferred_font_size}px</strong>
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-100">
                   <span className="text-slate-500">Minimum Font Size:</span>
-                  <strong className="text-slate-900 font-mono">{typography.min_font_size}px</strong>
+                  <strong className="text-slate-900 font-medium font-mono">{typography.min_font_size}px</strong>
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-100">
                   <span className="text-slate-500">Alignment:</span>
-                  <strong className="text-slate-900 capitalize">{typography.alignment}</strong>
+                  <strong className="text-slate-900 font-medium capitalize">{typography.alignment}</strong>
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-100">
                   <span className="text-slate-500">Vertical Clearance:</span>
-                  <strong className="text-slate-900 font-mono">
+                  <strong className="text-slate-900 font-medium font-mono">
                     {Math.round((typography.vertical_clearance_percent ?? 0.08) * 100)}% (safe padding)
                   </strong>
                 </div>
@@ -512,7 +501,7 @@ export const ExportWorkspace: React.FC<ExportWorkspaceProps> = ({
                       className="w-3 h-3 rounded-full border border-slate-300"
                       style={{ backgroundColor: typography.text_color }}
                     />
-                    <strong className="font-mono text-slate-900">{typography.text_color}</strong>
+                    <strong className="font-mono font-medium text-slate-900">{typography.text_color}</strong>
                   </div>
                 </div>
               </div>
@@ -522,21 +511,20 @@ export const ExportWorkspace: React.FC<ExportWorkspaceProps> = ({
             <div className="pt-2 border-t border-slate-100 space-y-1.5 text-xs">
               <div className="flex justify-between">
                 <span className="text-slate-500">Valid CSV Participants:</span>
-                <strong className="text-emerald-700 font-mono">{totalValid}</strong>
+                <strong className="text-emerald-700 font-mono font-medium">{totalValid}</strong>
               </div>
               {totalInvalid > 0 && (
                 <div className="flex justify-between">
                   <span className="text-slate-500">Invalid/Empty Rows:</span>
-                  <span className="text-rose-600 font-mono">{totalInvalid}</span>
+                  <span className="text-rose-600 font-mono font-medium">{totalInvalid}</span>
                 </div>
               )}
               {latestReport && (
                 <div className="flex justify-between">
                   <span className="text-slate-500">Dynamically Resized:</span>
-                  <span className="text-indigo-600 font-mono">{latestReport.reduction_count}</span>
+                  <span className="text-slate-700 font-mono font-medium">{latestReport.reduction_count}</span>
                 </div>
               )}
-
             </div>
           </div>
         </div>

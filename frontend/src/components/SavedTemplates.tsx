@@ -105,35 +105,36 @@ export const SavedTemplates: React.FC<SavedTemplatesProps> = ({
   }
 
   return (
-    <section className="rounded-xl border border-indigo-100 bg-gradient-to-r from-indigo-50/40 via-white to-slate-50 p-5 shadow-xs mb-8">
-      <div className="flex items-center justify-between pb-3 mb-3 border-b border-indigo-100/60">
-        <div className="flex items-center gap-2">
-          <LayoutTemplate className="h-4 w-4 text-indigo-600" />
-          <h2 className="text-xs font-semibold text-slate-900">
-            Saved Certificate Templates ({presets.length})
+    <section className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-xs mb-8">
+      <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
+        <div>
+          <h2 className="text-xs font-semibold text-slate-900 flex items-center gap-1.5">
+            <LayoutTemplate className="h-3.5 w-3.5 text-slate-700" />
+            <span>Saved Templates</span>
+            <span className="text-slate-400 font-normal">({presets.length})</span>
           </h2>
-          <span className="text-[10px] font-medium text-indigo-700 bg-indigo-100/60 px-2 py-0.5 rounded-full">
-            Ready to Reuse
-          </span>
+          <p className="text-[11px] text-slate-500 mt-0.5">
+            Reusable certificate templates with saved placements and font styling
+          </p>
         </div>
         <button
           type="button"
           onClick={loadPresets}
           className="text-slate-400 hover:text-slate-600 p-1 rounded transition-colors"
-          title="Refresh presets"
+          title="Refresh templates"
         >
-          <RefreshCw className="h-3 w-3" />
+          <RefreshCw className="h-3.5 w-3.5" />
         </button>
       </div>
 
       {errorMessage && (
-        <div className="mb-3 p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+        <div className="mb-3 p-2.5 rounded-lg bg-rose-50 border border-rose-200/80 text-rose-700 text-xs flex items-center gap-2">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-rose-600" />
           <span>{errorMessage}</span>
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {presets.map((preset) => {
           const isCurrentUsing = usingPresetId === preset.preset_id
           const isCurrentDeleting = deletingPresetId === preset.preset_id
@@ -141,19 +142,19 @@ export const SavedTemplates: React.FC<SavedTemplatesProps> = ({
           return (
             <div
               key={preset.preset_id}
-              className="p-3 rounded-lg border border-slate-200 bg-white hover:border-indigo-300 transition-all flex flex-col justify-between shadow-2xs group"
+              className="p-3 rounded-lg border border-slate-200/90 bg-slate-50/40 hover:bg-white hover:border-slate-300 transition-all flex flex-col justify-between group shadow-2xs"
             >
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 {/* Thumbnail Preview */}
-                <div className="h-28 rounded-md bg-slate-100 overflow-hidden relative border border-slate-100 flex items-center justify-center">
+                <div className="h-28 rounded-md bg-white overflow-hidden relative border border-slate-200/70 flex items-center justify-center">
                   <img
                     src={getPresetThumbnailUrl(preset.thumbnail_url)}
                     alt={preset.name}
                     className="w-full h-full object-contain"
                     loading="lazy"
                   />
-                  <div className="absolute top-1.5 right-1.5 flex items-center gap-1">
-                    <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-black/60 text-white backdrop-blur-xs">
+                  <div className="absolute top-1.5 right-1.5">
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-slate-900/75 text-white">
                       {preset.template_meta.format}
                     </span>
                   </div>
@@ -164,7 +165,7 @@ export const SavedTemplates: React.FC<SavedTemplatesProps> = ({
                   <h3 className="text-xs font-semibold text-slate-900 truncate" title={preset.name}>
                     {preset.name}
                   </h3>
-                  <div className="flex items-center gap-2 text-[10px] text-slate-500 mt-0.5">
+                  <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5">
                     <span className="capitalize">{preset.typography.font_id.replace('_', ' ')}</span>
                     <span>•</span>
                     <span>{preset.template_meta.width}×{preset.template_meta.height}</span>
@@ -173,13 +174,13 @@ export const SavedTemplates: React.FC<SavedTemplatesProps> = ({
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center justify-between pt-3 mt-2 border-t border-slate-100">
+              <div className="flex items-center justify-between pt-2.5 mt-2.5 border-t border-slate-200/60">
                 <button
                   type="button"
                   onClick={() => handleDeletePreset(preset)}
                   disabled={disabled || isCurrentDeleting || isCurrentUsing}
                   className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-40"
-                  title="Delete preset"
+                  title="Delete template"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
@@ -188,7 +189,7 @@ export const SavedTemplates: React.FC<SavedTemplatesProps> = ({
                   type="button"
                   onClick={() => handleUsePreset(preset.preset_id)}
                   disabled={disabled || isCurrentUsing || isCurrentDeleting}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-semibold transition-colors disabled:opacity-50 shadow-2xs"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium transition-colors disabled:opacity-50 shadow-2xs"
                 >
                   {isCurrentUsing ? (
                     <>

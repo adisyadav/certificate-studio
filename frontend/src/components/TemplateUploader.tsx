@@ -88,11 +88,11 @@ export const TemplateUploader: React.FC<TemplateUploaderProps> = ({
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-xs flex flex-col justify-between">
+    <div className="rounded-xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs flex flex-col justify-between">
       <div>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+            <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-700">
               <ImageIcon className="h-4 w-4" />
             </div>
             <div>
@@ -100,21 +100,21 @@ export const TemplateUploader: React.FC<TemplateUploaderProps> = ({
                 Certificate Template
               </h3>
               <p className="text-xs text-slate-500">
-                PNG, JPG, or single-page PDF (up to 20MB)
+                PNG, JPG, or PDF
               </p>
             </div>
           </div>
 
           {template && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-              <CheckCircle2 className="h-3 w-3" />
-              <span>Loaded</span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700">
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+              <span>Ready</span>
             </span>
           )}
         </div>
 
         {error && (
-          <div className="mb-4 p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start gap-2">
+          <div className="mb-4 p-3 rounded-lg bg-rose-50 border border-rose-200/80 text-rose-700 text-xs flex items-start gap-2">
             <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-rose-600" />
             <div className="leading-relaxed">{error}</div>
           </div>
@@ -123,46 +123,40 @@ export const TemplateUploader: React.FC<TemplateUploaderProps> = ({
         {template ? (
           <div className="space-y-4">
             {/* Visual Preview Container */}
-            <div className="relative aspect-video rounded-lg border border-slate-200 bg-slate-100 overflow-hidden flex items-center justify-center group">
+            <div className="relative aspect-video rounded-lg border border-slate-200 bg-slate-50/50 overflow-hidden flex items-center justify-center group">
               <img
                 src={getTemplatePreviewUrl(template.preview_url)}
                 alt="Certificate template preview"
-                className="max-h-full max-w-full object-contain shadow-xs"
+                className="max-h-full max-w-full object-contain"
               />
-              <div className="absolute inset-0 bg-slate-950/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   className="px-3 py-1.5 rounded-md bg-white text-slate-800 text-xs font-medium shadow-sm hover:bg-slate-50 transition-colors flex items-center gap-1.5"
                 >
-                  <RefreshCw className="h-3 w-3" />
-                  <span>Replace Template</span>
+                  <RefreshCw className="h-3.5 w-3.5 text-slate-600" />
+                  <span>Replace File</span>
                 </button>
               </div>
             </div>
 
             {/* Template Metrics */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-xs">
-              <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/80">
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100">
                 <span className="text-[11px] text-slate-500 block">Format</span>
                 <span className="font-semibold text-slate-800 uppercase font-mono">
                   {template.format}
                 </span>
               </div>
-              <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/80">
+              <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100">
                 <span className="text-[11px] text-slate-500 block">Dimensions</span>
                 <span className="font-semibold text-slate-800 font-mono">
                   {template.width} × {template.height}
                 </span>
               </div>
-              <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/80">
-                <span className="text-[11px] text-slate-500 block">Aspect Ratio</span>
-                <span className="font-semibold text-slate-800 capitalize">
-                  {template.orientation} ({template.aspect_ratio})
-                </span>
-              </div>
-              <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/80">
-                <span className="text-[11px] text-slate-500 block">File Size</span>
+              <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100">
+                <span className="text-[11px] text-slate-500 block">Size</span>
                 <span className="font-semibold text-slate-800">
                   {formatFileSize(template.file_size_bytes)}
                 </span>
@@ -170,16 +164,16 @@ export const TemplateUploader: React.FC<TemplateUploaderProps> = ({
             </div>
 
             <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs text-slate-500">
-              <span className="truncate max-w-[220px]" title={template.filename}>
-                📄 {template.filename}
+              <span className="truncate max-w-[200px]" title={template.filename}>
+                {template.filename}
               </span>
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploading}
-                className="text-indigo-600 hover:text-indigo-800 font-medium disabled:opacity-50"
+                className="text-slate-700 hover:text-slate-900 font-medium underline disabled:opacity-50"
               >
-                Upload different template
+                Change
               </button>
             </div>
           </div>
@@ -198,27 +192,25 @@ export const TemplateUploader: React.FC<TemplateUploaderProps> = ({
             tabIndex={0}
             role="button"
             aria-label="Upload certificate template"
-            className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+            className={`border border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors outline-none focus-visible:ring-2 focus-visible:ring-slate-400 ${
               isDragOver
-                ? 'border-indigo-500 bg-indigo-50/50'
-                : 'border-slate-300 hover:border-slate-400 bg-slate-50/50'
+                ? 'border-slate-800 bg-slate-50'
+                : 'border-slate-300 hover:border-slate-400 bg-slate-50/30'
             }`}
           >
             <div className="flex flex-col items-center justify-center">
-              <div className="h-12 w-12 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 mb-3">
+              <div className="h-10 w-10 rounded-full bg-white border border-slate-200 shadow-2xs flex items-center justify-center text-slate-600 mb-3">
                 {isUploading ? (
-                  <RefreshCw className="h-5 w-5 animate-spin text-indigo-600" />
+                  <RefreshCw className="h-4 w-4 animate-spin text-slate-800" />
                 ) : (
-                  <FileUp className="h-5 w-5" />
+                  <FileUp className="h-4 w-4" />
                 )}
               </div>
-              <span className="text-sm font-medium text-slate-800 mb-1">
-                {isUploading
-                  ? 'Processing template...'
-                  : 'Click or drag certificate template here'}
+              <span className="text-xs font-semibold text-slate-800 mb-1">
+                {isUploading ? 'Uploading...' : 'Upload certificate template'}
               </span>
-              <p className="text-xs text-slate-500 max-w-xs leading-relaxed">
-                Accepts high-res PNG, JPG or single-page PDF. Quality and aspect ratio are preserved losslessly.
+              <p className="text-[11px] text-slate-500 max-w-xs leading-relaxed">
+                Drag and drop or click to browse. PNG, JPG, or PDF up to 20MB.
               </p>
             </div>
           </div>

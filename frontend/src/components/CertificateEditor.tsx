@@ -10,23 +10,21 @@ import {
 } from 'react-konva'
 import type Konva from 'konva'
 import {
-  RotateCcw,
   Save,
   CheckCircle2,
   AlertCircle,
   ArrowLeft,
   ArrowRight,
-  UserCheck,
   Move,
   Maximize2,
-  Type,
   RefreshCw,
   AlertTriangle,
-  Sparkles,
   ChevronDown,
   ChevronUp,
   Sliders,
   Bookmark,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 import type {
   TemplateMetadata,
@@ -165,6 +163,9 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
   const [isSavingPreset, setIsSavingPreset] = useState<boolean>(false)
   const [presetSuccessMessage, setPresetSuccessMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
+  // 12. Preview mode toggle (temporarily hides bounding rectangle and handles)
+  const [isPreviewMode, setIsPreviewMode] = useState<boolean>(false)
 
   // Debounced layout timer
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -488,24 +489,6 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
     }
   }
 
-  // Reset to original saved state
-  const handleReset = () => {
-    if (savedPlacement) {
-      setCurrentPlacement(savedPlacement)
-    } else {
-      setCurrentPlacement({ x: 0.2, y: 0.45, width: 0.6, height: 0.12 })
-    }
-
-    if (savedTypography) {
-      setTypography(savedTypography)
-    }
-
-    setHasUnsavedPlacement(false)
-    setHasUnsavedTypography(false)
-    setSaveSuccess(false)
-    setPerfectFitSummary(null)
-  }
-
   // Single Primary Action: "Perfect Fit"
   const handlePerfectFit = useCallback(async (options?: { silent?: boolean }) => {
     if (!options?.silent) {
@@ -585,7 +568,6 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
   // Quick preset samples for convenient preview
   const shortestName = batchReport?.shortest_name || 'Ava'
   const longestName = batchReport?.longest_name_by_chars || 'Dr. Alexander Montgomery-Cunningham III'
-  const widestName = batchReport?.widest_name || null
 
   // Internal safe margins calculation for canvas text positioning
   const vertClearance = typography.vertical_clearance_percent ?? 0.08
@@ -597,57 +579,55 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
-        <div>
+      {/* Top Header & Toolbar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200/80">
+        <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={onBackToUpload}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 transition-colors mb-1.5"
+            className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-800 transition-colors"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            <span>Back to Ingestion</span>
+            <span>Upload</span>
           </button>
-          <h2 className="text-xl font-semibold text-slate-900 tracking-tight flex items-center gap-2">
-            <span>Certificate Placement & Typography Studio</span>
+          <span className="text-slate-300">|</span>
+          <h2 className="text-base font-semibold text-slate-900 tracking-tight">
+            Certificate Name Placement
           </h2>
-          <p className="text-xs text-slate-500">
-            Position the name area on your certificate. Click Perfect Fit to automatically fit all names.
-          </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
-          {hasUnsavedChanges && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-              <span>Unsaved Edits</span>
-            </span>
-          )}
-
-          {saveSuccess && !hasUnsavedChanges && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-              <span>Saved</span>
-            </span>
-          )}
-
+        <div className="flex items-center gap-2">
+          {/* Preview Toggle: Shows clean certificate without editing guides */}
           <button
             type="button"
-            onClick={handleReset}
-            className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 text-xs font-medium hover:bg-slate-50 transition-colors flex items-center gap-1.5"
-            title="Reset to saved settings"
+            onClick={() => setIsPreviewMode(!isPreviewMode)}
+            className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors flex items-center gap-1.5 ${
+              isPreviewMode
+                ? 'border-slate-900 bg-slate-900 text-white'
+                : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+            }`}
+            title={isPreviewMode ? 'Return to editing mode' : 'Preview certificate without rectangle'}
           >
-            <RotateCcw className="h-3.5 w-3.5" />
-            <span>Reset</span>
+            {isPreviewMode ? (
+              <>
+                <EyeOff className="h-3.5 w-3.5" />
+                <span>Exit Preview</span>
+              </>
+            ) : (
+              <>
+                <Eye className="h-3.5 w-3.5 text-slate-500" />
+                <span>Preview</span>
+              </>
+            )}
           </button>
 
           <button
             type="button"
             onClick={() => setShowSavePresetModal(true)}
-            className="px-3 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50/50 hover:bg-indigo-100/70 text-indigo-800 text-xs font-medium transition-colors flex items-center gap-1.5"
-            title="Save template, placement & font as a reusable preset"
+            className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium transition-colors flex items-center gap-1.5"
+            title="Save template, placement & font as a reusable template"
           >
-            <Bookmark className="h-3.5 w-3.5 text-indigo-600" />
+            <Bookmark className="h-3.5 w-3.5 text-slate-500" />
             <span>Save Template</span>
           </button>
 
@@ -655,10 +635,19 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
             type="button"
             onClick={handleSaveAll}
             disabled={isSaving}
-            className="px-4 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium shadow-sm transition-colors flex items-center gap-1.5 disabled:opacity-50"
+            className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium transition-colors flex items-center gap-1.5 disabled:opacity-50"
           >
-            <Save className="h-3.5 w-3.5" />
-            <span>{isSaving ? 'Saving...' : 'Save'}</span>
+            {saveSuccess ? (
+              <>
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                <span>Saved</span>
+              </>
+            ) : (
+              <>
+                <Save className="h-3.5 w-3.5 text-slate-500" />
+                <span>{isSaving ? 'Saving...' : 'Save'}</span>
+              </>
+            )}
           </button>
 
           <button
@@ -667,11 +656,11 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
             disabled={!canContinue}
             className={`px-4 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors ${
               canContinue
-                ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm'
+                ? 'bg-slate-900 hover:bg-slate-800 text-white shadow-2xs'
                 : 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
             }`}
           >
-            <span>Continue</span>
+            <span>Continue to Export</span>
             <ArrowRight className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -889,24 +878,26 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
 
                 {/* 2. Recipient Name Bounding Box & Live Text (EXACTLY ONE RECTANGLE) */}
                 <Group>
-                  <Rect
-                    ref={rectRef}
-                    x={canvasRect.x}
-                    y={canvasRect.y}
-                    width={canvasRect.width}
-                    height={canvasRect.height}
-                    fill="rgba(99, 102, 241, 0.08)"
-                    stroke="#4f46e5"
-                    strokeWidth={1.5}
-                    dash={[6, 4]}
-                    draggable={true}
-                    dragBoundFunc={(pos) => ({
-                      x: Math.max(0, Math.min(stageSize.width - canvasRect.width, pos.x)),
-                      y: Math.max(0, Math.min(stageSize.height - canvasRect.height, pos.y)),
-                    })}
-                    onDragEnd={handleDragEnd}
-                    onTransformEnd={handleTransformEnd}
-                  />
+                  {!isPreviewMode && (
+                    <Rect
+                      ref={rectRef}
+                      x={canvasRect.x}
+                      y={canvasRect.y}
+                      width={canvasRect.width}
+                      height={canvasRect.height}
+                      fill="rgba(59, 130, 246, 0.05)"
+                      stroke="#2563eb"
+                      strokeWidth={1.5}
+                      dash={[6, 4]}
+                      draggable={true}
+                      dragBoundFunc={(pos) => ({
+                        x: Math.max(0, Math.min(stageSize.width - canvasRect.width, pos.x)),
+                        y: Math.max(0, Math.min(stageSize.height - canvasRect.height, pos.y)),
+                      })}
+                      onDragEnd={handleDragEnd}
+                      onTransformEnd={handleTransformEnd}
+                    />
+                  )}
 
                   {/* 3. Live Personalized Name with loaded font & live auto-fit sizing */}
                   <KonvaText
@@ -925,31 +916,33 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
                   />
 
                   {/* 4. Konva Transformer with visible resize handles */}
-                  <Transformer
-                    ref={trRef}
-                    rotateEnabled={false}
-                    keepRatio={false}
-                    enabledAnchors={[
-                      'top-left',
-                      'top-right',
-                      'bottom-left',
-                      'bottom-right',
-                      'middle-left',
-                      'middle-right',
-                    ]}
-                    boundBoxFunc={(oldBox, newBox) => {
-                      if (newBox.width < 25 || newBox.height < 15) return oldBox
-                      if (
-                        newBox.x < 0 ||
-                        newBox.y < 0 ||
-                        newBox.x + newBox.width > stageSize.width ||
-                        newBox.y + newBox.height > stageSize.height
-                      ) {
-                        return oldBox
-                      }
-                      return newBox
-                    }}
-                  />
+                  {!isPreviewMode && (
+                    <Transformer
+                      ref={trRef}
+                      rotateEnabled={false}
+                      keepRatio={false}
+                      enabledAnchors={[
+                        'top-left',
+                        'top-right',
+                        'bottom-left',
+                        'bottom-right',
+                        'middle-left',
+                        'middle-right',
+                      ]}
+                      boundBoxFunc={(oldBox, newBox) => {
+                        if (newBox.width < 25 || newBox.height < 15) return oldBox
+                        if (
+                          newBox.x < 0 ||
+                          newBox.y < 0 ||
+                          newBox.x + newBox.width > stageSize.width ||
+                          newBox.y + newBox.height > stageSize.height
+                        ) {
+                          return oldBox
+                        }
+                        return newBox
+                      }}
+                    />
+                  )}
                 </Group>
               </Layer>
             </Stage>
@@ -976,27 +969,124 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
 
         {/* Right Column: Clean, Intuitive Controls Sidebar */}
         <div className="space-y-4">
-          {/* Section 1: Typography & Styling Card */}
-          <div className="p-4 rounded-xl border border-slate-200 bg-white shadow-xs space-y-4">
-            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-              <Type className="h-4 w-4 text-indigo-600" />
+          {/* Section 1: Name Fitting Action */}
+          <div className="p-4 rounded-xl border border-slate-200/90 bg-white shadow-2xs space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-900">
+                Fit All Names
+              </span>
+              {batchReport && (
+                <span className={`text-[11px] font-medium flex items-center gap-1 ${
+                  batchReport.all_fit ? 'text-emerald-700' : 'text-amber-700'
+                }`}>
+                  {batchReport.all_fit ? (
+                    <>
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                      <span>All {batchReport.total_analyzed} fit</span>
+                    </>
+                  ) : (
+                    <>
+                      <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+                      <span>{batchReport.overflow_count} need space</span>
+                    </>
+                  )}
+                </span>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => handlePerfectFit()}
+              disabled={isPerfectFitting || isSaving}
+              className="w-full py-2 px-3 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium shadow-2xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {isPerfectFitting ? (
+                <>
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                  <span>Fitting names...</span>
+                </>
+              ) : (
+                <span>Perfect Fit All Names</span>
+              )}
+            </button>
+          </div>
+
+          {/* Section 2: Participant Preview Selector */}
+          <div className="p-4 rounded-xl border border-slate-200/90 bg-white shadow-2xs space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <h3 className="text-xs font-semibold text-slate-900">
-                Typography & Style
+                Preview Recipient
               </h3>
+              <span className="text-[11px] text-slate-400">
+                {validParticipants.length} total
+              </span>
+            </div>
+
+            {/* Quick Presets: Short, Long */}
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <button
+                type="button"
+                onClick={() => setSelectedSample(shortestName)}
+                className={`p-2 rounded-lg border text-left transition-colors ${
+                  selectedSample === shortestName
+                    ? 'border-slate-800 bg-slate-50 text-slate-900 font-medium'
+                    : 'border-slate-200 hover:bg-slate-50 text-slate-600'
+                }`}
+              >
+                <span className="text-[10px] text-slate-400 block">Short Name</span>
+                <span className="truncate block">{shortestName}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedSample(longestName)}
+                className={`p-2 rounded-lg border text-left transition-colors ${
+                  selectedSample === longestName
+                    ? 'border-slate-800 bg-slate-50 text-slate-900 font-medium'
+                    : 'border-slate-200 hover:bg-slate-50 text-slate-600'
+                }`}
+              >
+                <span className="text-[10px] text-slate-400 block">Long Name</span>
+                <span className="truncate block">{longestName}</span>
+              </button>
+            </div>
+
+            {/* Full CSV Participant Dropdown */}
+            {validParticipants.length > 0 && (
+              <div>
+                <select
+                  value={selectedSample}
+                  onChange={(e) => setSelectedSample(e.target.value)}
+                  className="w-full bg-white border border-slate-200 hover:border-slate-300 rounded-md py-1.5 px-2 text-xs text-slate-800 shadow-2xs focus:outline-none focus:ring-1 focus:ring-slate-800"
+                >
+                  {validParticipants.slice(0, 50).map((p) => (
+                    <option key={p.row_number} value={p.name}>
+                      #{p.row_number}: {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* Section 3: Typography & Styling Card */}
+          <div className="p-4 rounded-xl border border-slate-200/90 bg-white shadow-2xs space-y-3.5">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <h3 className="text-xs font-semibold text-slate-900">
+                Text Style
+              </h3>
+              {fontLoadingState === 'loading' && (
+                <span className="text-[10px] text-slate-500 flex items-center gap-1">
+                  <RefreshCw className="h-2.5 w-2.5 animate-spin" /> Loading font
+                </span>
+              )}
             </div>
 
             {/* Font Family Selector */}
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-semibold text-slate-800">
-                  Certificate Font
-                </label>
-                {fontLoadingState === 'loading' && (
-                  <span className="text-[10px] text-indigo-600 flex items-center gap-1">
-                    <RefreshCw className="h-2.5 w-2.5 animate-spin" /> Loading
-                  </span>
-                )}
-              </div>
+              <label className="text-[11px] font-medium text-slate-600 block mb-1">
+                Font Family
+              </label>
               <select
                 value={typography.font_id}
                 onChange={(e) => {
@@ -1004,7 +1094,7 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
                   setHasUnsavedTypography(true)
                   setSaveSuccess(false)
                 }}
-                className="w-full bg-white border border-slate-300 rounded-md py-1.5 px-2.5 text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 shadow-xs"
+                className="w-full bg-white border border-slate-200 hover:border-slate-300 rounded-md py-1.5 px-2.5 text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-800 shadow-2xs"
               >
                 {availableFonts.map((f) => (
                   <option key={f.id} value={f.id}>
@@ -1017,10 +1107,10 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
             {/* Font Color & Alignment */}
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-xs font-semibold text-slate-800 block mb-1">
-                  Text Color
+                <label className="text-[11px] font-medium text-slate-600 block mb-1">
+                  Color
                 </label>
-                <div className="flex items-center gap-2 border border-slate-300 rounded-md p-1 bg-white">
+                <div className="flex items-center gap-2 border border-slate-200 rounded-md p-1 bg-white">
                   <input
                     type="color"
                     value={typography.text_color}
@@ -1029,17 +1119,17 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
                       setHasUnsavedTypography(true)
                       setSaveSuccess(false)
                     }}
-                    className="h-6 w-8 rounded border-none cursor-pointer p-0 bg-transparent"
+                    className="h-5 w-7 rounded border-none cursor-pointer p-0 bg-transparent"
                   />
-                  <span className="text-[11px] font-mono text-slate-700 uppercase">
+                  <span className="text-[10px] font-mono text-slate-700 uppercase">
                     {typography.text_color}
                   </span>
                 </div>
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-800 block mb-1">
-                  Alignment
+                <label className="text-[11px] font-medium text-slate-600 block mb-1">
+                  Align
                 </label>
                 <select
                   value={typography.alignment}
@@ -1051,7 +1141,7 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
                     setHasUnsavedTypography(true)
                     setSaveSuccess(false)
                   }}
-                  className="w-full bg-white border border-slate-300 rounded-md py-1.5 px-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 shadow-xs"
+                  className="w-full bg-white border border-slate-200 hover:border-slate-300 rounded-md py-1.5 px-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-800 shadow-2xs"
                 >
                   <option value="center">Center</option>
                   <option value="left">Left</option>
@@ -1059,133 +1149,6 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
                 </select>
               </div>
             </div>
-          </div>
-
-          {/* Section 2: Real Participant Preview Selector */}
-          <div className="p-4 rounded-xl border border-slate-200 bg-white shadow-xs space-y-3">
-            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-              <UserCheck className="h-4 w-4 text-indigo-600" />
-              <h3 className="text-xs font-semibold text-slate-900">
-                Participant Preview
-              </h3>
-            </div>
-
-            {/* Quick Presets: Short, Long, Widest */}
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => setSelectedSample(shortestName)}
-                className={`p-2 rounded-lg border text-left transition-colors ${
-                  selectedSample === shortestName
-                    ? 'border-indigo-500 bg-indigo-50/50 text-indigo-900 font-medium'
-                    : 'border-slate-200 hover:bg-slate-50 text-slate-700'
-                }`}
-              >
-                <span className="text-[10px] text-slate-500 block">Short Name</span>
-                <span className="truncate block">{shortestName}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setSelectedSample(longestName)}
-                className={`p-2 rounded-lg border text-left transition-colors ${
-                  selectedSample === longestName
-                    ? 'border-indigo-500 bg-indigo-50/50 text-indigo-900 font-medium'
-                    : 'border-slate-200 hover:bg-slate-50 text-slate-700'
-                }`}
-              >
-                <span className="text-[10px] text-slate-500 block">Long Name</span>
-                <span className="truncate block">{longestName}</span>
-              </button>
-            </div>
-
-            {widestName && widestName !== longestName && (
-              <button
-                type="button"
-                onClick={() => setSelectedSample(widestName)}
-                className={`w-full p-2 rounded-lg border text-left text-xs transition-colors ${
-                  selectedSample === widestName
-                    ? 'border-indigo-500 bg-indigo-50/50 text-indigo-900 font-medium'
-                    : 'border-slate-200 hover:bg-slate-50 text-slate-700'
-                }`}
-              >
-                <span className="text-[10px] text-slate-500 block">Widest Name</span>
-                <span className="truncate block">{widestName}</span>
-              </button>
-            )}
-
-            {/* Full CSV Participant Dropdown */}
-            {validParticipants.length > 0 && (
-              <div>
-                <label className="text-[11px] font-semibold text-slate-700 block mb-1">
-                  Preview Name ({validParticipants.length} participants):
-                </label>
-                <select
-                  value={selectedSample}
-                  onChange={(e) => setSelectedSample(e.target.value)}
-                  className="w-full bg-white border border-slate-300 rounded-md py-1.5 px-2 text-xs text-slate-800 shadow-xs focus:ring-1 focus:ring-indigo-500 focus:outline-none"
-                >
-                  {validParticipants.slice(0, 50).map((p) => (
-                    <option key={p.row_number} value={p.name}>
-                      #{p.row_number}: {p.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-          </div>
-
-          {/* Section 3: Primary Action - "Perfect Fit" */}
-          <div className="p-4 rounded-xl border border-indigo-200 bg-gradient-to-b from-indigo-50/50 to-white shadow-xs space-y-3">
-            <div>
-              <h3 className="text-xs font-semibold text-indigo-950 flex items-center gap-1.5">
-                <Sparkles className="h-3.5 w-3.5 text-indigo-600" />
-                <span>Automatic Typography Fitting</span>
-              </h3>
-              <p className="text-[11px] text-slate-500 mt-0.5">
-                Calculates optimal font sizing across all participant names so everyone fits cleanly.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => handlePerfectFit()}
-              disabled={isPerfectFitting || isSaving}
-              className="w-full py-2.5 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {isPerfectFitting ? (
-                <>
-                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                  <span>Fitting all names...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-3.5 w-3.5 text-amber-300" />
-                  <span>Perfect Fit</span>
-                </>
-              )}
-            </button>
-
-            {batchReport && (
-              <div className="pt-2 border-t border-indigo-100 flex items-center justify-between text-[11px]">
-                <span className="text-slate-600">Fit status:</span>
-                <span className={`font-semibold flex items-center gap-1 ${
-                  batchReport.all_fit ? 'text-emerald-700' : 'text-amber-700'
-                }`}>
-                  {batchReport.all_fit ? (
-                    <>
-                      <CheckCircle2 className="h-3 w-3 text-emerald-600" />
-                      <span>All {batchReport.total_analyzed} fit</span>
-                    </>
-                  ) : (
-                    <>
-                      <AlertTriangle className="h-3 w-3 text-amber-600" />
-                      <span>{batchReport.overflow_count} need space</span>
-                    </>
-                  )}
-                </span>
-              </div>
-            )}
           </div>
 
           {/* Section 4: Collapsed Advanced Settings (Closed by default) */}
