@@ -128,42 +128,15 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({
 
         {csvSummary ? (
           <div className="space-y-3">
-            {/* Participant Statistics */}
-            <div className="grid grid-cols-3 gap-2 text-xs">
-              <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
-                <span className="text-[10px] text-slate-400 block">Total Rows</span>
-                <span className="font-semibold text-slate-800 font-mono">
-                  {csvSummary.total_rows}
-                </span>
-              </div>
-              <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
-                <span className="text-[10px] text-slate-400 block">Valid Names</span>
-                <span className="font-semibold text-slate-800 font-mono">
-                  {csvSummary.valid_count}
-                </span>
-              </div>
-              <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
-                <span className="text-[10px] text-slate-400 block">Duplicates</span>
-                <span className="font-semibold text-slate-800 font-mono">
-                  {csvSummary.duplicate_count}
-                </span>
-              </div>
-            </div>
-
             {/* Name Column Selection Dropdown */}
             <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/60">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <label
-                    htmlFor="name-column-select"
-                    className="text-xs font-semibold text-slate-800 block"
-                  >
-                    Name Column
-                  </label>
-                  <span className="text-[10px] text-slate-400 block">
-                    Field printed on certificates
-                  </span>
-                </div>
+              <div className="flex items-center justify-between gap-2">
+                <label
+                  htmlFor="name-column-select"
+                  className="text-xs font-semibold text-slate-800 shrink-0"
+                >
+                  Name Column
+                </label>
                 <div className="relative inline-block min-w-[160px]">
                   <select
                     id="name-column-select"

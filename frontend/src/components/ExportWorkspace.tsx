@@ -189,7 +189,7 @@ export const ExportWorkspace: React.FC<ExportWorkspaceProps> = ({
             <span>Export Certificates</span>
           </h2>
           <p className="text-xs text-slate-500">
-            Generate individual, print-ready personalized PDFs for every valid participant and download as a ZIP archive.
+            Generate personalized PDF certificates and download the batch as a ZIP archive.
           </p>
         </div>
 
@@ -236,11 +236,8 @@ export const ExportWorkspace: React.FC<ExportWorkspaceProps> = ({
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-semibold text-slate-900">
-                  Batch PDF Generation
+                  Batch Generation
                 </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Generates vector-crisp personalized certificates formatted with exact typography.
-                </p>
               </div>
 
               {isCompleted ? (

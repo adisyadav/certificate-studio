@@ -146,18 +146,13 @@ export const SavedTemplates: React.FC<SavedTemplatesProps> = ({
   }
 
   return (
-    <section className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-xs mb-8">
+    <section className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-xs mb-6">
       <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
-        <div>
-          <h2 className="text-xs font-semibold text-slate-900 flex items-center gap-1.5">
-            <LayoutTemplate className="h-3.5 w-3.5 text-slate-700" />
-            <span>Saved Templates</span>
-            <span className="text-slate-400 font-normal">({presets.length})</span>
-          </h2>
-          <p className="text-[11px] text-slate-500 mt-0.5">
-            Reusable certificate templates with saved placements and font styling
-          </p>
-        </div>
+        <h2 className="text-xs font-semibold text-slate-900 flex items-center gap-1.5">
+          <LayoutTemplate className="h-3.5 w-3.5 text-slate-700" />
+          <span>Saved Templates</span>
+          <span className="text-slate-400 font-normal">({presets.length})</span>
+        </h2>
         <button
           type="button"
           onClick={loadPresets}

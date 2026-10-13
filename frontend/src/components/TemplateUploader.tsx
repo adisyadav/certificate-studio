@@ -177,37 +177,21 @@ export const TemplateUploader: React.FC<TemplateUploaderProps> = ({
               </div>
             </div>
 
-            {/* Template Metrics */}
-            <div className="grid grid-cols-3 gap-2 text-xs">
-              <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
-                <span className="text-[10px] text-slate-400 block">Format</span>
-                <span className="font-semibold text-slate-800 uppercase font-mono">
-                  {template.format}
+            {/* Compact Template Summary */}
+            <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
+              <div className="flex items-center gap-2 truncate">
+                <span className="font-medium text-slate-800 truncate" title={template.filename}>
+                  {template.filename}
+                </span>
+                <span className="text-[11px] text-slate-400 shrink-0">
+                  {template.width}×{template.height} • {formatFileSize(template.file_size_bytes)}
                 </span>
               </div>
-              <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
-                <span className="text-[10px] text-slate-400 block">Dimensions</span>
-                <span className="font-semibold text-slate-800 font-mono">
-                  {template.width} × {template.height}
-                </span>
-              </div>
-              <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
-                <span className="text-[10px] text-slate-400 block">Size</span>
-                <span className="font-semibold text-slate-800 font-mono">
-                  {formatFileSize(template.file_size_bytes)}
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs text-slate-500">
-              <span className="truncate max-w-[200px]" title={template.filename}>
-                {template.filename}
-              </span>
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploading}
-                className="text-slate-700 hover:text-slate-900 font-medium underline disabled:opacity-50 text-[11px]"
+                className="text-slate-700 hover:text-slate-900 font-medium underline disabled:opacity-50 text-[11px] shrink-0 ml-2"
               >
                 Change
               </button>

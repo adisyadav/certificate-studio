@@ -15,8 +15,6 @@ import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
-  Move,
-  Maximize2,
   RefreshCw,
   AlertTriangle,
   ChevronDown,
@@ -812,13 +810,12 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
           {/* Top Status Bar: Static height to eliminate vertical jumping */}
           <div className="w-full h-8 flex items-center justify-between pb-2 mb-2 border-b border-slate-200/60 text-xs">
             <div className="flex items-center gap-2">
-              <span className="font-semibold text-slate-700 flex items-center gap-1">
-                <Move className="h-3.5 w-3.5 text-indigo-600" />
-                <span>Recipient Name Placement Area</span>
+              <span className="font-medium text-slate-700 text-xs">
+                Name Placement
               </span>
 
               {fontLoadingState === 'loading' ? (
-                <span className="inline-flex items-center gap-1 text-[11px] text-indigo-600 font-medium">
+                <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
                   <RefreshCw className="h-3 w-3 animate-spin" />
                   <span>Loading font...</span>
                 </span>
@@ -832,7 +829,7 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
                   <span>Font unavailable. Click to retry</span>
                 </button>
               ) : isCalculatingLayout ? (
-                <span className="inline-flex items-center gap-1 text-[11px] text-indigo-600 font-medium">
+                <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
                   <RefreshCw className="h-3 w-3 animate-spin" />
                   <span>Fitting text...</span>
                 </span>
@@ -850,14 +847,14 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
 
             <div className="flex items-center gap-2 text-[11px]">
               {textFits ? (
-                <span className="inline-flex items-center gap-1 text-emerald-700 font-semibold bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                <span className="inline-flex items-center gap-1 text-emerald-700 font-medium bg-emerald-50 px-2 py-0.5 rounded text-[11px]">
                   <CheckCircle2 className="h-3 w-3 text-emerald-600" />
-                  <span>Fits cleanly</span>
+                  <span>Fits</span>
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1 text-amber-700 font-semibold bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
+                <span className="inline-flex items-center gap-1 text-amber-700 font-medium bg-amber-50 px-2 py-0.5 rounded text-[11px]">
                   <AlertTriangle className="h-3 w-3 text-amber-600" />
-                  <span>Needs more space</span>
+                  <span>Needs space</span>
                 </span>
               )}
             </div>
@@ -961,17 +958,6 @@ export const CertificateEditor: React.FC<CertificateEditorProps> = ({
                 </Group>
               </Layer>
             </Stage>
-          </div>
-
-          {/* Bottom Interaction Guide */}
-          <div className="mt-3 h-5 text-[11px] text-slate-500 flex items-center justify-center gap-4">
-            <span className="flex items-center gap-1">
-              <Move className="h-3 w-3 text-indigo-500" /> Drag box to position
-            </span>
-            <span className="flex items-center gap-1">
-              <Maximize2 className="h-3 w-3 text-indigo-500" /> Drag handles to resize
-            </span>
-            <span>⌨️ Arrow keys nudge</span>
           </div>
 
           {layoutWarnings.length > 0 && (

@@ -4,7 +4,6 @@ import {
   CheckCircle2,
   RefreshCw,
   ArrowRight,
-  ShieldCheck,
   AlertTriangle,
   ServerCrash,
   Plus,
@@ -428,7 +427,7 @@ export const App: React.FC = () => {
       </header>
 
       {/* Main Workspace */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-8 flex flex-col justify-between">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-6">
         <div>
           {/* Global Error Banner */}
           {globalError && (
@@ -449,7 +448,7 @@ export const App: React.FC = () => {
           )}
 
           {activeTab === 'upload' ? (
-            <div className="space-y-8">
+            <div className="space-y-6">
               {/* Clean Upload Header & Primary Action */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
@@ -457,7 +456,7 @@ export const App: React.FC = () => {
                     Upload Certificate & Participants
                   </h1>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Add your certificate image or single-page PDF, along with your recipient CSV list.
+                    PNG, JPG, or single-page PDF template, and participant CSV.
                   </p>
                 </div>
 
@@ -536,16 +535,6 @@ export const App: React.FC = () => {
           ) : null}
 
         </div>
-
-
-        {/* Footer */}
-        <footer className="mt-12 pt-6 border-t border-slate-200/80 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-4">
-          <div className="flex items-center gap-1.5">
-            <ShieldCheck className="h-3.5 w-3.5 text-slate-600" />
-            <span>Local processing only — all participant data and files remain on your device</span>
-          </div>
-          <span className="text-[11px] text-slate-400">Certificate Studio v1.0</span>
-        </footer>
       </main>
     </div>
   )
