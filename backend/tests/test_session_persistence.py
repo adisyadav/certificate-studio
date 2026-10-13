@@ -82,3 +82,37 @@ def test_job_id_reuse_does_not_create_new_jobs():
     assert final_job["job_id"] == job_id
     assert final_job["csv_summary"]["valid_count"] == 2
     assert final_job["participants_preview"][0]["name"] == "Bob"
+
+
+def test_new_project_creates_distinct_job_preserving_previous():
+    # 1. Project A: create job and upload template + placement
+    resp_a = client.post("/api/jobs")
+    assert resp_a.status_code == 201
+    job_a_id = resp_a.json()["job_id"]
+
+    client.post(
+        f"/api/jobs/{job_a_id}/template",
+        files={"file": ("cert_a.png", create_test_image(), "image/png")},
+    )
+    placement_a = {"x": 0.2, "y": 0.4, "width": 0.6, "height": 0.15}
+    client.post(f"/api/jobs/{job_a_id}/placement", json={"placement": placement_a})
+
+    # 2. User starts "New Project": calls POST /api/jobs
+    resp_b = client.post("/api/jobs")
+    assert resp_b.status_code == 201
+    job_b_id = resp_b.json()["job_id"]
+
+    # Verify Job B is distinct and clean
+    assert job_b_id != job_a_id
+    job_b = resp_b.json()
+    assert job_b["template"] is None
+    assert job_b["placement"] is None
+    assert job_b["csv_summary"] is None
+
+    # 3. Verify Job A and its assets remain completely intact on the backend
+    job_a_check = client.get(f"/api/jobs/{job_a_id}")
+    assert job_a_check.status_code == 200
+    job_a_data = job_a_check.json()
+    assert job_a_data["template"] is not None
+    assert job_a_data["placement"] == placement_a
+

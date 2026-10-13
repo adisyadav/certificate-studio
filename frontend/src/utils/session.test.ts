@@ -30,4 +30,19 @@ describe('session persistence utilities', () => {
     setStoredActiveTab('upload')
     expect(getStoredActiveTab()).toBe('upload')
   })
+
+  it('replaces old job ID with distinct new job ID and resets active tab', () => {
+    // Initial project session
+    setStoredJobId('job-first-1111')
+    setStoredActiveTab('editor')
+    expect(getStoredJobId()).toBe('job-first-1111')
+    expect(getStoredActiveTab()).toBe('editor')
+
+    // Start New Project: creates distinct job ID, resets tab to upload
+    setStoredJobId('job-second-2222')
+    setStoredActiveTab('upload')
+    expect(getStoredJobId()).toBe('job-second-2222')
+    expect(getStoredActiveTab()).not.toBe('job-first-1111')
+    expect(getStoredActiveTab()).toBe('upload')
+  })
 })

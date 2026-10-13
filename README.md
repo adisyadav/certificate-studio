@@ -31,8 +31,13 @@ Certificate Studio is organized as a clean, decoupled monorepo:
   - Font EM ascender/descender metric centering prevents ascenders or descenders (like 'y', 'g', 'j') from vertically displacing names.
 - **Lightweight Authoritative Layout API**:
   - `GET /api/jobs/{job_id}/layout` computes fitted font size, bounding boxes, and fitting warnings without requiring full image rasterization.
-- **Session Persistence & Backwards Compatibility**:
-  - Persists active job ID, uploaded assets, placement rectangle, typography, and analysis across page reloads.
+- **Session Persistence, New Project & Session Reset**:
+  - Automatically recovers active job ID, uploaded template, participant CSV, placement coordinates, and typography preferences across browser refreshes.
+  - Prominent "New Project" header action enables users to intentionally start a fresh project at any time.
+  - Confirms with the user before clearing workspace if files or placement exist.
+  - Generates a distinct backend job session, updates browser `localStorage`, resets view to Ingestion tab, and shows a fresh empty workspace.
+  - Preserves previous jobs and uploaded assets on the backend without deletion.
+  - Allows seamless replacement of certificate templates via "Upload different template".
   - Safely ignores legacy cleanup fields in older job records without data corruption.
 
 ---

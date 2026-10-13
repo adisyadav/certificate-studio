@@ -12,6 +12,7 @@ import {
   SlidersHorizontal,
   UploadCloud,
   ServerCrash,
+  Plus,
 } from 'lucide-react'
 import {
   fetchHealth,
@@ -51,6 +52,7 @@ export const App: React.FC = () => {
   const [isCsvUploading, setIsCsvUploading] = useState<boolean>(false)
   const [globalError, setGlobalError] = useState<string | null>(null)
   const [backendOffline, setBackendOffline] = useState<boolean>(false)
+  const [isCreatingNewProject, setIsCreatingNewProject] = useState<boolean>(false)
 
   // Initialize or restore session
   const initApp = useCallback(async () => {
@@ -143,6 +145,42 @@ export const App: React.FC = () => {
   const handleTabChange = (tab: AppTab) => {
     setActiveTab(tab)
     setStoredActiveTab(tab)
+  }
+
+  const handleNewProject = async () => {
+    // Check if the current job has any uploaded files or configured settings
+    const hasExistingData = !!(
+      currentJob?.template ||
+      (currentJob?.csv_summary && currentJob.csv_summary.total_rows > 0) ||
+      currentJob?.placement
+    )
+
+    if (hasExistingData) {
+      const confirmed = window.confirm(
+        'Start a new certificate project?\n\nYour current certificate template, CSV data, and placement settings will be cleared from this workspace. Previous jobs remain saved on the server.'
+      )
+      if (!confirmed) {
+        return
+      }
+    }
+
+    setIsCreatingNewProject(true)
+    setGlobalError(null)
+    try {
+      const newJob = await createJob()
+      setCurrentJob(newJob)
+      setStoredJobId(newJob.job_id)
+      setActiveTab('upload')
+      setStoredActiveTab('upload')
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setGlobalError(`Failed to create new project: ${err.message}`)
+      } else {
+        setGlobalError('Failed to create new project.')
+      }
+    } finally {
+      setIsCreatingNewProject(false)
+    }
   }
 
   const handleTemplateUpload = async (file: File) => {
@@ -345,10 +383,31 @@ export const App: React.FC = () => {
             </button>
           </div>
 
-          {/* Status & Session ID */}
-          <div className="flex items-center gap-3">
+          {/* Actions & Status */}
+          <div className="flex items-center gap-2.5">
+            {/* New Project Button */}
+            <button
+              type="button"
+              onClick={handleNewProject}
+              disabled={isCreatingNewProject || backendOffline}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 text-xs font-semibold shadow-2xs transition-colors disabled:opacity-50"
+              title="Start a fresh certificate generation project"
+            >
+              {isCreatingNewProject ? (
+                <>
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin text-indigo-600" />
+                  <span>Creating...</span>
+                </>
+              ) : (
+                <>
+                  <Plus className="h-3.5 w-3.5 text-indigo-600" />
+                  <span>New Project</span>
+                </>
+              )}
+            </button>
+
             {currentJob && (
-              <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 text-xs font-mono">
+              <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 text-xs font-mono">
                 <span>Job:</span>
                 <span className="font-semibold">{currentJob.job_id.slice(0, 8)}...</span>
               </div>
