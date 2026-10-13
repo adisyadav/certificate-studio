@@ -3,6 +3,7 @@ import {
   BUNDLED_FONTS,
   getFontFamily,
   ensureFontLoaded,
+  isFontLoaded,
   preloadAllFonts,
 } from './fontLoader'
 
@@ -25,6 +26,12 @@ describe('fontLoader utility', () => {
       expect(font.filename.endsWith('.ttf')).toBe(true)
       expect(font.url.startsWith('/fonts/')).toBe(true)
     }
+  })
+
+  it('isFontLoaded reports font status accurately', () => {
+    // Non-browser vitest environment
+    expect(isFontLoaded('great_vibes')).toBe(true)
+    expect(isFontLoaded('invalid_font_id')).toBe(false)
   })
 
   it('ensureFontLoaded resolves without errors', async () => {

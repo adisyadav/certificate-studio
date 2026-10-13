@@ -120,4 +120,17 @@ describe('Preset Client API Utilities', () => {
     expect(result.job_id).toBe('fresh-job-789')
     expect(result.csv_summary).toBeNull()
   })
+
+  it('deletePreset sends DELETE request to /api/presets/:id', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ status: 'success' }),
+    } as Response)
+
+    await deletePreset('preset-123')
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'http://localhost:8000/api/presets/preset-123',
+      expect.objectContaining({ method: 'DELETE' })
+    )
+  })
 })

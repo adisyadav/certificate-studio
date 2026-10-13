@@ -54,6 +54,19 @@ export const BUNDLED_FONTS: Record<string, BundledFontDefinition> = {
 const loadedFontFamilies = new Set<string>()
 
 /**
+ * Checks if a font is already loaded and available in the browser.
+ */
+export function isFontLoaded(fontId: string): boolean {
+  const def = BUNDLED_FONTS[fontId]
+  if (!def) return false
+  if (loadedFontFamilies.has(def.family)) return true
+  if (typeof document === 'undefined' || !('fonts' in document)) {
+    return true
+  }
+  return document.fonts.check(`16px "${def.family}"`)
+}
+
+/**
  * Maps font ID (e.g. 'great_vibes') to exact CSS font-family name.
  */
 export function getFontFamily(fontId: string): string {
@@ -88,7 +101,16 @@ export async function ensureFontLoaded(fontId: string): Promise<boolean> {
       return true
     }
 
-    // 2. Programmatically create and load FontFace
+    // 2. Trigger loading through native CSS font engine (handles @font-face rules cleanly)
+    await document.fonts.load(`16px "${family}"`)
+    await document.fonts.ready
+
+    if (document.fonts.check(`16px "${family}"`)) {
+      loadedFontFamilies.add(family)
+      return true
+    }
+
+    // 3. Fallback: Programmatically create FontFace and add to document.fonts
     if (typeof FontFace !== 'undefined') {
       const fontFace = new FontFace(family, `url(${url})`)
       const loadedFace = await fontFace.load()
@@ -98,13 +120,7 @@ export async function ensureFontLoaded(fontId: string): Promise<boolean> {
       return true
     }
 
-    // 3. Fallback: document.fonts.load
-    await document.fonts.load(`16px "${family}"`)
-    const success = document.fonts.check(`16px "${family}"`)
-    if (success) {
-      loadedFontFamilies.add(family)
-    }
-    return success
+    return false
   } catch (err) {
     console.error(`Failed to load font "${family}":`, err)
     return false
