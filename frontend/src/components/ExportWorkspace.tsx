@@ -210,12 +210,25 @@ export const ExportWorkspace: React.FC<ExportWorkspaceProps> = ({
       </div>
 
       {errorMessage && (
-        <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start gap-2.5 shadow-xs">
-          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-rose-600" />
-          <div className="space-y-1">
-            <p className="font-semibold">Batch Export Halted</p>
-            <p className="whitespace-pre-line leading-relaxed">{errorMessage}</p>
+        <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start justify-between gap-2.5 shadow-xs">
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-rose-600" />
+            <div className="space-y-1">
+              <p className="font-semibold">Batch Export Notice</p>
+              <p className="whitespace-pre-line leading-relaxed">{errorMessage}</p>
+            </div>
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              setErrorMessage(null)
+              handleStartExport()
+            }}
+            disabled={Boolean(isStarting || isGenerating)}
+            className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-semibold shrink-0 transition-colors"
+          >
+            Retry Export
+          </button>
         </div>
       )}
 

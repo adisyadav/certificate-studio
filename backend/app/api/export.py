@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import FileResponse
 
 from app.schemas.export import ExportJobResponse
+from app.schemas.validation import BatchValidationReport
 from app.services.job_service import JobService, JobNotFoundError
 from app.services.batch_generation_service import (
     BatchGenerationService,
@@ -9,6 +10,23 @@ from app.services.batch_generation_service import (
 )
 
 router = APIRouter(tags=["Export & Download"])
+
+
+@router.get("/jobs/{job_id}/validate-export", response_model=BatchValidationReport)
+async def validate_export(job_id: str) -> BatchValidationReport:
+    """
+    Evaluates the complete batch readiness through the authoritative Quality Assurance pipeline.
+    Returns structured findings (Passed, Warning, Blocking Error).
+    """
+    try:
+        JobService.get_job(job_id)
+    except JobNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job '{job_id}' not found.",
+        )
+
+    return BatchGenerationService.validate_job_readiness(job_id)
 
 
 @router.post("/jobs/{job_id}/exports", response_model=ExportJobResponse)

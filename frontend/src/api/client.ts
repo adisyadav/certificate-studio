@@ -129,6 +129,25 @@ export interface GenerationReport {
   errors: string[]
 }
 
+export interface ValidationFinding {
+  level: 'passed' | 'warning' | 'blocking_error'
+  category: string
+  message: string
+  details?: Record<string, unknown> | null
+  row_number?: number | null
+  participant_name?: string | null
+}
+
+export interface BatchValidationReport {
+  is_ready_to_export: boolean
+  total_participants: number
+  blocking_error_count: number
+  warning_count: number
+  passed_count: number
+  summary_message: string
+  findings: ValidationFinding[]
+}
+
 export interface ExportJobResponse {
   export_id: string
   job_id: string
@@ -458,6 +477,21 @@ export function getRenderedPreviewUrl(
 export function getTemplatePreviewUrl(relativeUrl: string): string {
   if (relativeUrl.startsWith('http')) return relativeUrl
   return `${API_BASE_URL}${relativeUrl}`
+}
+
+export async function validateExport(jobId: string): Promise<BatchValidationReport> {
+  const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/validate-export`, {
+    headers: {
+      Accept: 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null)
+    throw new ApiError(errorData?.detail || `Failed to validate export (${response.status})`, response.status)
+  }
+
+  return response.json()
 }
 
 export async function startBatchExport(jobId: string): Promise<ExportJobResponse> {
